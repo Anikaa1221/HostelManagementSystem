@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Hostel Management System — Login or create an account" />
+  <title>Login — Hostel Management</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <div class="page-wrapper">
+    <div class="card card-sm">
+      <h2 id="form-title">Welcome Back</h2>
+      <p class="subtitle" id="form-subtitle">Sign in to your account</p>
+
+      <!-- Tab Toggle -->
+      <div class="tab-toggle">
+        <button id="tab-login" class="active" onclick="switchTab('login')">Login</button>
+        <button id="tab-signup" onclick="switchTab('signup')">Sign Up</button>
+      </div>
+
+      <!-- Form -->
+      <form id="auth-form" onsubmit="handleSubmit(event)">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input id="username" type="text" placeholder="Enter your username" required />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input id="password" type="password" placeholder="Enter your password" required />
+        </div>
+
+        <!-- Role Selection (Shown in Signup mode) -->
+        <div id="role-group" class="form-group" style="display: none;">
+          <label for="role">Select Your Role</label>
+          <select id="role" onchange="toggleStudentEmailField()">
+            <option value="student">Student</option>
+            <option value="admin">Administrator (Warden)</option>
+          </select>
+        </div>
+
+        <!-- Pre-registered email lookup (Shown for Student Signup) -->
+        <div id="email-group" class="form-group" style="display: none;">
+          <label for="email">Registered Student Email</label>
+          <input id="email" type="email" placeholder="e.g. student@college.com" />
+          <small class="subtitle" style="display: block; margin-top: 4px; font-size: 0.75rem;">Must match the email
+            pre-registered by the Warden.</small>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submit-btn">
+          Login
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API = "http://localhost:3000";
+    let mode = "login";
+
+    // Redirect if already logged in based on role
+    const userData = localStorage.getItem("hostel_user");
+    if (userData) {
+      const user = JSON.parse(userData);
+      if (user.role === "admin") {
+        window.location.href = "dashboard.html";
+      } else {
+        window.location.href = "student-dashboard.html";
+      }
+    }
+
+    function switchTab(newMode) {
+      mode = newMode;
+      document.getElementById("tab-login").classList.toggle("active", mode === "login");
+      document.getElementById("tab-signup").classList.toggle("active", mode === "signup");
+      document.getElementById("form-title").textContent = mode === "login" ? "Welcome Back" : "Create Account";
+      document.getElementById("form-subtitle").textContent = mode === "login"
+        ? "Sign in to your account"
+        : "Register a new account";
+
+      const roleGroup = document.getElementById("role-group");
+      if (mode === "signup") {
+        roleGroup.style.display = "block";
+        toggleStudentEmailField();
+      } else {
+        roleGroup.style.display = "none";
+        document.getElementById("email-group").style.display = "none";
+      }
+
+      document.getElementById("submit-btn").textContent = mode === "login" ? "Login" : "Sign Up";
+    }
+
+    function toggleStudentEmailField() {
+      const role = document.getElementById("role").value;
+      const emailGroup = document.getElementById("email-group");
+      const emailInput = document.getElementById("email");
+      if (mode === "signup" && role === "student") {
+        emailGroup.style.display = "block";
+        emailInput.required = true;
+      } else {
+        emailGroup.style.display = "none";
+        emailInput.required = false;
+      }
+    }
+
+    async function handleSubmit(e) {
+      e.preventDefault();
+      const btn = document.getElementById("submit-btn");
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      const role = document.getElementById("role") ? document.getElementById("role").value : "student";
+      const email = document.getElementById("email") ? document.getElementById("email").value.trim() : "";
+
+      if (!username || !password) {
+        showToast("Please fill in all fields", "error");
+        return;
+      }
+
+      if (mode === "signup" && role === "student" && !email) {
+        showToast("Registered email is required for students", "error");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Please wait...';
+
+      try {
+        const endpoint = mode === "login" ? "/login" : "/signup";
+        const payload = { username, password };
+        if (mode === "signup") {
+          payload.role = role;
+          if (role === "student") {
+            payload.email = email;
+          }
+        }
+
+        const res = await fetch(API + endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          localStorage.setItem("hostel_user", JSON.stringify(data.user));
+          showToast(data.message, "success");
+          setTimeout(() => {
+            if (data.user.role === "admin") {
+              window.location.href = "dashboard.html";
+            } else {
+              window.location.href = "student-dashboard.html";
+            }
+          }, 800);
+        } else {
+          showToast(data.message || "Something went wrong", "error");
+        }
+      } catch (err) {
+        showToast("Cannot connect to server. Is it running?", "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = mode === "login" ? "Login" : "Sign Up";
+      }
+    }
+
+    function showToast(message, type) {
+      const existing = document.querySelector(".toast");
+      if (existing) existing.remove();
+
+      const toast = document.createElement("div");
+      toast.className = "toast toast-" + type;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+  </script>
+
+</body>
+
+</html>

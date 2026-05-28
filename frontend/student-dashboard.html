@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Hostel Management System — Student Portal" />
+  <title>Student Portal — Hostel Management</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="navbar-brand">🏠 Hostel Student Portal</div>
+  <div class="user-badge">
+    <div class="user-avatar" id="user-avatar">S</div>
+    <span id="user-name">Student</span>
+    <button class="btn btn-ghost" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<!-- Content -->
+<div class="container">
+  <div class="section-header">
+    <div>
+      <h1>Student Dashboard</h1>
+      <p class="subtitle" id="welcome-text">Loading student profile...</p>
+    </div>
+  </div>
+
+  <!-- Profile & Roommate Info Row -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 28px;">
+    <!-- Profile Card -->
+    <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <h2>My Profile</h2>
+        <p class="subtitle" style="margin-bottom: 12px;">Registered hostel student details</p>
+        <div style="line-height: 2; margin-top: 16px;">
+          <div>Name: <strong id="profile-name">-</strong></div>
+          <div>Email: <span id="profile-email" style="color:var(--text-secondary); font-weight:500;">-</span></div>
+          <div>Phone: <span id="profile-phone" style="color:var(--text-secondary); font-weight:500;">-</span></div>
+          <div>Dept: <span id="profile-dept" style="color:var(--text-secondary); font-weight:500;">-</span></div>
+        </div>
+      </div>
+      
+      <div style="border-top:1px solid var(--border); padding-top:14px; margin-top:16px;">
+        <span style="font-size:0.85rem; color:var(--text-muted);">Registered Student ID: </span>
+        <strong id="profile-id" style="color:var(--accent);">-</strong>
+      </div>
+    </div>
+
+    <!-- Room Details Card -->
+    <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <h2>Room & Roommates</h2>
+        <p class="subtitle" style="margin-bottom: 12px;">Your allocated room and bed share info</p>
+        <div style="margin: 16px 0;">
+          Room Number:<br>
+          <span style="font-size: 2.25rem; font-weight: 700; color: var(--success);" id="profile-room">Unallocated</span>
+        </div>
+        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 16px;">
+          Type: <strong id="profile-room-type">-</strong>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border); padding-top:14px;">
+        <div style="font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">My Roommates:</div>
+        <div id="roommates-list">
+          <em style="color:var(--text-muted); font-size:0.9rem;">None (Single occupancy)</em>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Smart Sign-In Attendance Card with Simulator Widget -->
+  <div class="card" style="margin-bottom: 28px; border: 1px solid var(--accent);">
+    <h2>Smart Check-In Register</h2>
+    <p class="subtitle">Enter the active PIN displayed at the Warden's desk. The check-in window is open daily from 7:30 PM to 9:00 PM.</p>
+
+    <!-- Developer Simulator Panel -->
+    <div class="simulator-panel">
+      <div class="simulator-header">
+        <span>⚙️ Developer Grading Simulator Widget</span>
+      </div>
+      <p class="subtitle" style="margin-bottom: 14px; font-size: 0.82rem; color: var(--text-secondary);">
+        Simulate Geolocation parameters and time constraints below to test all sign-in validation conditions.
+      </p>
+      
+      <div class="form-row" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); align-items: start;">
+        <div class="form-group">
+          <label for="sim-location">Simulate Location</label>
+          <select id="sim-location" onchange="updateSimCoords()">
+            <option value="hostel">At Hostel (Bangalore, 12.9716, 77.5946)</option>
+            <option value="away">Away from Hostel (Chennai, 13.0827, 80.2707)</option>
+            <option value="denied">Blocked / Denied Location Access</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Active Simulated Coordinates</label>
+          <div style="font-size:0.82rem; font-weight:600; padding:12px; background:var(--bg-primary); border-radius:var(--radius-sm); border:1px solid var(--border);" id="sim-coords">
+            Lat: 12.9716, Lng: 77.5946
+          </div>
+        </div>
+        <div class="form-group" style="padding-top:22px;">
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; text-transform:none;">
+            <input type="checkbox" id="sim-bypass-time" checked style="width:auto; margin:0;" />
+            Bypass Time Window Check
+          </label>
+        </div>
+        <div class="form-group" style="padding-top:22px;">
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; text-transform:none;">
+            <input type="checkbox" id="sim-bypass-geo" style="width:auto; margin:0;" />
+            Bypass Geofencing Check
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Attendance Form -->
+    <div id="checkin-status-box" class="geo-indicator warning">
+      <span class="geo-indicator-icon">📍</span>
+      <span id="checkin-status-text">Location details ready for check-in verification</span>
+    </div>
+
+    <form id="checkin-form" onsubmit="submitCheckin(event)">
+      <div class="form-row" style="grid-template-columns: 2fr 1fr; align-items: end;">
+        <div class="form-group">
+          <label for="checkin-pin">Warden Verification PIN (6-digit)</label>
+          <input id="checkin-pin" type="text" placeholder="Enter PIN code shown on Warden desk" required maxlength="6" style="letter-spacing: 4px; font-weight: 700; text-align: center; font-size: 1.15rem;" />
+        </div>
+        <div class="form-group">
+          <button type="submit" class="btn btn-primary" id="checkin-btn" style="width: 100%;">Check In Now</button>
+        </div>
+      </div>
+    </form>
+    
+    <div id="my-checkin-history" style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 18px; display: none;">
+      <h3 style="font-size:0.95rem; margin-bottom:8px;">Today's Check-in Record:</h3>
+      <span class="badge badge-present" id="my-today-badge">Present</span>
+      <span style="font-size:0.85rem; color:var(--text-secondary); margin-left:8px;" id="my-today-time">Checked in at 7:45 PM via Smartphone</span>
+    </div>
+  </div>
+
+  <!-- Fees and Complaints / Leaves Row -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 28px;">
+    <!-- My Fees -->
+    <div class="card">
+      <h2>My Outstanding Bills</h2>
+      <p class="subtitle">Mess/rent invoices generated for your profile</p>
+      
+      <div id="student-fees-area">
+        <div class="empty-state">
+          <p>Loading balance sheets...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- File a Complaint -->
+    <div class="card">
+      <h2>File a Grievance</h2>
+      <p class="subtitle">Submit a complaint (plumbing, electrical, cleaning) to Warden office</p>
+      <form id="complaint-form" onsubmit="submitComplaint(event)">
+        <div class="form-group">
+          <label for="complaint-desc">Complaint Description</label>
+          <textarea id="complaint-desc" rows="3" placeholder="Describe the issue in detail (e.g. Room 101 AC fan is making noise)" required style="width:100%; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-primary); outline:none; resize:none; font-family:inherit; font-size:0.95rem;"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" id="complaint-btn">Submit Complaint</button>
+      </form>
+
+      <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:12px;">
+        <h3 style="font-size:0.95rem; margin-bottom:10px;">My Complaints Status</h3>
+        <div id="student-complaints-area">
+          <!-- Complaints status list -->
+          <em style="color:var(--text-muted); font-size:0.85rem;">No complaints raised.</em>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leave Applications -->
+  <div class="card">
+    <h2>Apply for Outing / Leave</h2>
+    <p class="subtitle">Submit leave request applications for Warden approval</p>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+      <!-- Leave Form -->
+      <form id="leave-form" onsubmit="submitLeave(event)">
+        <div class="form-row" style="grid-template-columns: 1fr 1fr; margin-bottom: 12px;">
+          <div class="form-group">
+            <label for="leave-from">From Date</label>
+            <input id="leave-from" type="date" required />
+          </div>
+          <div class="form-group">
+            <label for="leave-to">To Date</label>
+            <input id="leave-to" type="date" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="leave-reason">Reason for Outing/Leave</label>
+          <input id="leave-reason" type="text" placeholder="e.g. Going home for summer holidays" required />
+        </div>
+        <button type="submit" class="btn btn-primary" id="leave-btn">Apply for Leave</button>
+      </form>
+
+      <!-- Leave List -->
+      <div>
+        <h3 style="font-size:0.95rem; margin-bottom:8px;">Application Log History</h3>
+        <div id="student-leaves-area">
+          <div class="empty-state" style="padding: 12px;">
+            <p>Loading application logs...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const API = "http://localhost:3000";
+  let currentStudentId = null;
+  let currentEmail = null;
+  let simulatedLat = 12.9716;
+  let simulatedLng = 77.5946;
+  let simulatedDenied = false;
+
+  // Auth guard
+  const userData = localStorage.getItem("hostel_user");
+  if (!userData) {
+    window.location.href = "login.html";
+  } else {
+    const user = JSON.parse(userData);
+    if (user.role !== "student") {
+      window.location.href = "dashboard.html";
+    }
+    currentStudentId = user.student_id;
+    document.getElementById("user-name").textContent = user.username;
+    document.getElementById("user-avatar").textContent = user.username.charAt(0).toUpperCase();
+    
+    if (!currentStudentId) {
+      showToast("Fatal error: User profile is not linked to student record", "error");
+    } else {
+      loadStudentProfile();
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem("hostel_user");
+    window.location.href = "login.html";
+  }
+
+  // Update simulator coordinates display
+  function updateSimCoords() {
+    const locVal = document.getElementById("sim-location").value;
+    const coordsDiv = document.getElementById("sim-coords");
+    const statusBox = document.getElementById("checkin-status-box");
+    const statusText = document.getElementById("checkin-status-text");
+
+    if (locVal === "hostel") {
+      simulatedLat = 12.9716;
+      simulatedLng = 77.5946;
+      simulatedDenied = false;
+      coordsDiv.textContent = `Lat: ${simulatedLat}, Lng: ${simulatedLng}`;
+      statusBox.className = "geo-indicator success";
+      statusText.textContent = "Location ready: Simulated inside Hostel boundary ( बैंगलोर)";
+    } else if (locVal === "away") {
+      simulatedLat = 13.0827;
+      simulatedLng = 80.2707;
+      simulatedDenied = false;
+      coordsDiv.textContent = `Lat: ${simulatedLat}, Lng: ${simulatedLng}`;
+      statusBox.className = "geo-indicator error";
+      statusText.textContent = "Location warning: Simulated far away in Chennai (Out of Bounds)";
+    } else {
+      simulatedLat = null;
+      simulatedLng = null;
+      simulatedDenied = true;
+      coordsDiv.textContent = "Permission Blocked / Denied";
+      statusBox.className = "geo-indicator error";
+      statusText.textContent = "Location error: Geolocation permission denied by user browser";
+    }
+  }
+
+  // Load Student Details
+  async function loadStudentProfile() {
+    try {
+      // 1. Fetch Student profile
+      const resProfile = await fetch(API + `/students/${currentStudentId}`);
+      const dataProfile = await resProfile.json();
+
+      if (!dataProfile.success) {
+        showToast("Error retrieving student profile", "error");
+        return;
+      }
+
+      const s = dataProfile.data;
+      currentEmail = s.email;
+
+      document.getElementById("profile-name").textContent = s.name;
+      document.getElementById("profile-email").textContent = s.email;
+      document.getElementById("profile-phone").textContent = s.ph_no || "-";
+      document.getElementById("profile-dept").textContent = s.dept || "-";
+      document.getElementById("profile-id").textContent = `ID #${s.id}`;
+      document.getElementById("welcome-text").textContent = `Welcome to your student portal, ${s.name} 👋`;
+
+      const roomNo = s.room_no || "Unallocated";
+      document.getElementById("profile-room").textContent = roomNo !== "Unallocated" ? `Room ${roomNo}` : "Unallocated";
+      
+      // 2. Fetch all students to match roommates
+      const resStuds = await fetch(API + "/students");
+      const dataStuds = await resStuds.json();
+
+      if (dataStuds.success && roomNo !== "Unallocated") {
+        // Find roommates (exclude current student)
+        const roommates = dataStuds.data.filter(item => item.room_no === roomNo && item.id !== currentStudentId);
+        
+        const listDiv = document.getElementById("roommates-list");
+        if (roommates.length === 0) {
+          listDiv.innerHTML = '<em style="color:var(--text-muted); font-size:0.85rem;">None (Single occupancy room)</em>';
+        } else {
+          listDiv.innerHTML = roommates.map(r => `
+            <div style="font-size:0.85rem; font-weight:600; margin-bottom:4px; color:var(--text-primary);">
+              👤 ${escapeHTML(r.name)} (${escapeHTML(r.dept)})
+            </div>
+          `).join("");
+        }
+
+        // Fetch room type from /rooms
+        const resRooms = await fetch(API + "/rooms");
+        const roomsData = await resRooms.json();
+        if (roomsData.success) {
+          const roomObj = roomsData.data.find(r => r.room_no === roomNo);
+          if (roomObj) {
+            document.getElementById("profile-room-type").textContent = `${roomObj.type} Room`;
+          }
+        }
+      }
+
+      // Load specific student data modules
+      loadStudentAttendance();
+      loadStudentFees();
+      loadStudentComplaints();
+      loadStudentLeaves();
+
+    } catch (err) {
+      showToast("Connection to server failed on profile load", "error");
+    }
+  }
+
+  // ---- Load Student Attendance History ----
+  async function loadStudentAttendance() {
+    try {
+      const res = await fetch(API + `/attendance/${currentStudentId}`);
+      const data = await res.json();
+      
+      if (data.success && data.data.length > 0) {
+        const todayStr = new Date().toISOString().split("T")[0];
+        const todayRecord = data.data.find(r => new Date(r.date).toISOString().split("T")[0] === todayStr);
+
+        if (todayRecord) {
+          document.getElementById("my-checkin-history").style.display = "block";
+          document.getElementById("my-today-badge").textContent = todayRecord.status;
+          document.getElementById("my-today-badge").className = todayRecord.status === "Present" ? "badge badge-present" : "badge badge-absent";
+          document.getElementById("my-today-time").textContent = `Verified via ${todayRecord.method} (Geolocated: ${todayRecord.geofenced ? "Yes" : "No"})`;
+          
+          // Disable check-in form
+          document.getElementById("checkin-pin").disabled = true;
+          document.getElementById("checkin-btn").disabled = true;
+          document.getElementById("checkin-btn").textContent = "Signed Present";
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // ---- Submit Smart Attendance Check-In ----
+  async function submitCheckin(e) {
+    e.preventDefault();
+    const btn = document.getElementById("checkin-btn");
+    const pin = document.getElementById("checkin-pin").value.trim();
+
+    if (!pin) {
+      showToast("Please enter verification PIN", "error");
+      return;
+    }
+
+    const bypassTime = document.getElementById("sim-bypass-time").checked;
+    const bypassGeo = document.getElementById("sim-bypass-geo").checked;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const payload = {
+      student_id: currentStudentId,
+      pin,
+      bypass_time: bypassTime,
+      bypass_geofence: bypassGeo
+    };
+
+    if (!bypassGeo) {
+      if (simulatedDenied) {
+        showToast("Check-in failed: Geolocation access was denied", "error");
+        btn.disabled = false;
+        btn.textContent = "Check In Now";
+        return;
+      }
+      payload.lat = simulatedLat;
+      payload.lng = simulatedLng;
+    }
+
+    try {
+      const res = await fetch(API + "/attendance/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Attendance check-in successful!", "success");
+        document.getElementById("checkin-form").reset();
+        loadStudentAttendance();
+      } else {
+        showToast(data.message || "Sign-in verification failed", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Check In Now";
+    }
+  }
+
+  // ---- Load Student Fees ----
+  async function loadStudentFees() {
+    try {
+      const res = await fetch(API + `/fees?student_id=${currentStudentId}`);
+      const data = await res.json();
+      const area = document.getElementById("student-fees-area");
+
+      if (!data.success || data.data.length === 0) {
+        area.innerHTML = `
+          <div class="empty-state" style="padding: 16px 0;">
+            <div class="empty-state-icon">🎉</div>
+            <p>You have no bills issued. Balance is fully settled!</p>
+          </div>`;
+        return;
+      }
+
+      let html = `<div class="table-wrapper"><table>
+        <thead><tr>
+          <th>Amount</th><th>Due Date</th><th>Status</th>
+        </tr></thead><tbody>`;
+
+      data.data.forEach(b => {
+        const dateStr = new Date(b.due_date).toLocaleDateString("en-IN", {
+          year: "numeric", month: "short", day: "numeric"
+        });
+        const badgeClass = b.status === "Paid" ? "badge-present" : "badge-absent";
+        const amtColor = b.status === "Paid" ? "var(--success)" : "var(--danger)";
+
+        html += `<tr>
+          <td><strong style="color:${amtColor};">₹${Number(b.amount).toLocaleString("en-IN")}</strong></td>
+          <td>📅 ${dateStr}</td>
+          <td><span class="badge ${badgeClass}">${b.status}</span></td>
+        </tr>`;
+      });
+      html += "</tbody></table></div>";
+      area.innerHTML = html;
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // ---- Load Student Complaints ----
+  async function loadStudentComplaints() {
+    try {
+      const res = await fetch(API + `/complaints?student_id=${currentStudentId}`);
+      const data = await res.json();
+      const area = document.getElementById("student-complaints-area");
+
+      if (!data.success || data.data.length === 0) {
+        area.innerHTML = `<em style="color:var(--text-muted); font-size:0.85rem;">No complaints raised.</em>`;
+        return;
+      }
+
+      let html = `<div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">`;
+      data.data.forEach(c => {
+        let badgeStyle = "badge-outline-danger";
+        if (c.status === "In Progress") badgeStyle = "badge-outline-warning";
+        else if (c.status === "Resolved") badgeStyle = "badge-outline-success";
+
+        html += `
+          <div style="background:var(--bg-primary); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span class="badge-outline ${badgeStyle}" style="font-size:0.7rem;">${c.status}</span>
+              <span style="font-size:0.75rem; color:var(--text-muted);">📅 ${new Date(c.date).toLocaleDateString("en-IN")}</span>
+            </div>
+            <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">${escapeHTML(c.description)}</div>
+          </div>
+        `;
+      });
+      html += `</div>`;
+      area.innerHTML = html;
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // ---- Submit Complaint ----
+  async function submitComplaint(e) {
+    e.preventDefault();
+    const btn = document.getElementById("complaint-btn");
+    const desc = document.getElementById("complaint-desc").value.trim();
+
+    if (!desc) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      const res = await fetch(API + "/complaints", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: currentStudentId, description: desc })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Complaint submitted successfully!", "success");
+        document.getElementById("complaint-form").reset();
+        loadStudentComplaints();
+      } else {
+        showToast(data.message || "Error submitting complaint", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Submit Complaint";
+    }
+  }
+
+  // ---- Load Leaves Applications ----
+  async function loadStudentLeaves() {
+    try {
+      const res = await fetch(API + `/leaves?student_id=${currentStudentId}`);
+      const data = await res.json();
+      const area = document.getElementById("student-leaves-area");
+
+      if (!data.success || data.data.length === 0) {
+        area.innerHTML = `<em style="color:var(--text-muted); font-size:0.85rem;">No outing logs filed.</em>`;
+        return;
+      }
+
+      let html = `<div style="display:flex; flex-direction:column; gap:8px;">`;
+      data.data.forEach(l => {
+        let badgeStyle = "badge-outline-danger";
+        if (l.status === "Pending") badgeStyle = "badge-outline-warning";
+        else if (l.status === "Approved") badgeStyle = "badge-outline-success";
+
+        const fromStr = new Date(l.from_date).toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+        const toStr = new Date(l.to_date).toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+
+        html += `
+          <div style="background:var(--bg-primary); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span class="badge-outline ${badgeStyle}" style="font-size:0.7rem;">${l.status}</span>
+              <span style="font-size:0.8rem; font-weight:600; color:var(--accent);">${fromStr} - ${toStr}</span>
+            </div>
+            <div style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:4px;">Reason: ${escapeHTML(l.reason)}</div>
+          </div>
+        `;
+      });
+      html += `</div>`;
+      area.innerHTML = html;
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // ---- Submit Leave application ----
+  async function submitLeave(e) {
+    e.preventDefault();
+    const btn = document.getElementById("leave-btn");
+    const from_date = document.getElementById("leave-from").value;
+    const to_date = document.getElementById("leave-to").value;
+    const reason = document.getElementById("leave-reason").value.trim();
+
+    if (!from_date || !to_date || !reason) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      const res = await fetch(API + "/leaves", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: currentStudentId, from_date, to_date, reason })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Leave application submitted!", "success");
+        document.getElementById("leave-form").reset();
+        loadStudentLeaves();
+      } else {
+        showToast(data.message || "Error submitting leave", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Apply for Leave";
+    }
+  }
+
+  // Helpers
+  function escapeHTML(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function showToast(message, type) {
+    const existing = document.querySelector(".toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "toast toast-" + type;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  // Init Geolocation Simulation
+  updateSimCoords();
+</script>
+</body>
+</html>

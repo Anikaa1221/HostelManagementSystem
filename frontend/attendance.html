@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Hostel Management System — Mark & View Attendance" />
+  <title>Attendance — Hostel Management</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="navbar-brand">🏠 Hostel Manager</div>
+  <div class="navbar-links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="students.html">Students</a>
+    <a href="attendance.html" class="active">Attendance</a>
+    <a href="rooms.html">Rooms</a>
+    <a href="complaints.html">Complaints</a>
+    <a href="visitors.html">Visitors</a>
+    <a href="fees.html">Fees</a>
+  </div>
+  <div class="user-badge">
+    <div class="user-avatar" id="user-avatar">A</div>
+    <span id="user-name">Admin</span>
+    <button class="btn btn-ghost" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<!-- Content -->
+<div class="container">
+  <div class="section-header">
+    <h1>Smart Attendance</h1>
+  </div>
+
+  <!-- Smart PIN Terminal -->
+  <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 28px;">
+    <div class="stat-card" style="grid-column: span 1; min-height: 280px; display: flex; flex-direction: column; justify-content: space-between;">
+      <div class="pin-terminal" style="margin-bottom: 0; flex-grow: 1;">
+        <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Warden Verification Code</div>
+        <div class="pin-display" id="active-pin">------</div>
+        <div class="timer-container">
+          <div class="timer-bar-bg">
+            <div class="timer-bar-fill" id="timer-bar" style="width: 100%;"></div>
+          </div>
+          <div class="timer-text" id="timer-label">Checking server...</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="stat-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <h3>Hostel Register Status</h3>
+        <p class="subtitle" style="margin-bottom: 12px;">Display this terminal screen at the office desk. Students must physically verify their PIN and Geolocation to sign present.</p>
+        <div style="margin: 16px 0;">
+          <span class="badge badge-present" id="window-status">Active (7:30 - 9:00 PM)</span>
+        </div>
+        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 10px;">
+          Checked-in today: <strong id="today-stats" style="color: var(--accent); font-size: 1.25rem; font-weight: 700;">-</strong>
+        </div>
+      </div>
+      
+      <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 16px; font-size: 0.8rem; color: var(--text-muted);">
+        PIN code rotates every 30 seconds to prevent student cheating.
+      </div>
+    </div>
+  </div>
+
+  <!-- Monthly Ledger Report Grid -->
+  <div class="card" style="margin-bottom: 28px;">
+    <h2>Monthly Attendance Ledger</h2>
+    <p class="subtitle">Search and view the dynamic, automated monthly register ledger (no manual book creation needed!).</p>
+    <div class="form-row" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));">
+      <div class="form-group">
+        <label for="report-month">Month</label>
+        <select id="report-month">
+          <option value="1">January</option>
+          <option value="2">February</option>
+          <option value="3">March</option>
+          <option value="4">April</option>
+          <option value="5">May</option>
+          <option value="6">June</option>
+          <option value="7">July</option>
+          <option value="8">August</option>
+          <option value="9">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="report-year">Year</label>
+        <select id="report-year">
+          <option value="2025">2025</option>
+          <option value="2026">2026</option>
+          <option value="2027">2027</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" onclick="loadMonthlyLedger()" style="width: 100%;">View Ledger</button>
+      </div>
+    </div>
+
+    <div id="ledger-grid-area" style="margin-top: 20px;">
+      <!-- Grid table loads here -->
+      <div style="text-align: center; color: var(--text-muted); padding: 24px;">
+        Select Month & Year, then click "View Ledger" to generate report.
+      </div>
+    </div>
+  </div>
+
+  <!-- Manual Attendance Override -->
+  <div class="card" style="margin-bottom: 28px;">
+    <h2>Manual Override</h2>
+    <p class="subtitle">Manually mark present/absent for students (e.g. for sick students or students without phones)</p>
+    <form id="attendance-form" onsubmit="markAttendance(event)">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="student-select">Student</label>
+          <select id="student-select" required>
+            <option value="">-- Select Student --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="status-select">Status</label>
+          <select id="status-select" required>
+            <option value="Present">Present</option>
+            <option value="Absent">Absent</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn btn-primary" id="mark-btn">Mark Override</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Attendance Daily Log Records -->
+  <div class="card">
+    <h2>Daily Sign-in Logs</h2>
+    <p class="subtitle" id="record-count">Loading...</p>
+    <div id="attendance-table-area">
+      <div class="empty-state">
+        <div class="empty-state-icon">⏳</div>
+        <p>Loading records...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = "http://localhost:3000";
+  let activePinTimer = null;
+
+  // Set default month/year in dropdown
+  const today = new Date();
+  document.getElementById("report-month").value = today.getMonth() + 1;
+  document.getElementById("report-year").value = today.getFullYear();
+
+  // Auth guard
+  const userData = localStorage.getItem("hostel_user");
+  if (!userData) {
+    window.location.href = "login.html";
+  } else {
+    const user = JSON.parse(userData);
+    if (user.role !== "admin") {
+      window.location.href = "student-dashboard.html";
+    }
+    document.getElementById("user-name").textContent = user.username;
+    document.getElementById("user-avatar").textContent = user.username.charAt(0).toUpperCase();
+  }
+
+  function logout() {
+    localStorage.removeItem("hostel_user");
+    window.location.href = "login.html";
+  }
+
+  // Check window status
+  function updateTimeWindowStatus() {
+    const now = new Date();
+    const hrs = now.getHours();
+    const mins = now.getMinutes();
+    const totalMins = hrs * 60 + mins;
+    const startMins = 19 * 60 + 30; // 7:30 PM
+    const endMins = 21 * 60; // 9:00 PM
+
+    const statusBadge = document.getElementById("window-status");
+    if (totalMins >= startMins && totalMins <= endMins) {
+      statusBadge.textContent = "Open (7:30 PM - 9:00 PM)";
+      statusBadge.className = "badge badge-present";
+    } else {
+      statusBadge.textContent = "Closed (Outside 7:30 - 9:00 PM)";
+      statusBadge.className = "badge badge-absent";
+    }
+  }
+
+  // ---- Smart Attendance PIN Rotator ----
+  async function fetchWardenPIN() {
+    try {
+      const res = await fetch(API + "/attendance/active-pin");
+      const data = await res.json();
+      if (data.success) {
+        // Space out the PIN for readability (e.g. 582103 -> 582 103)
+        const rawCode = data.code;
+        const formattedCode = rawCode.substring(0, 3) + " " + rawCode.substring(3);
+        document.getElementById("active-pin").textContent = formattedCode;
+        
+        // Setup visual timer bar animation
+        const pct = (data.secondsRemaining / 30) * 100;
+        document.getElementById("timer-bar").style.width = `${pct}%`;
+        document.getElementById("timer-label").textContent = `Rotating in ${data.secondsRemaining}s`;
+
+        // Schedule next check
+        if (activePinTimer) clearTimeout(activePinTimer);
+        activePinTimer = setTimeout(fetchWardenPIN, 1000);
+      }
+    } catch (err) {
+      document.getElementById("active-pin").textContent = "OFFLINE";
+      document.getElementById("timer-label").textContent = "Cannot connect to server";
+    }
+  }
+
+  // ---- Load Monthly Attendance Ledger ----
+  async function loadMonthlyLedger() {
+    const month = document.getElementById("report-month").value;
+    const year = document.getElementById("report-year").value;
+    const gridArea = document.getElementById("ledger-grid-area");
+
+    gridArea.innerHTML = `
+      <div class="empty-state">
+        <div class="spinner"></div>
+        <p>Loading ledger grid...</p>
+      </div>`;
+
+    try {
+      const res = await fetch(API + `/attendance/report?month=${month}&year=${year}`);
+      const data = await res.json();
+
+      if (!data.success || data.students.length === 0) {
+        gridArea.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <p>No student data found to build ledger.</p>
+          </div>`;
+        return;
+      }
+
+      // Generate HTML report grid
+      let html = `<div class="report-grid-wrapper"><table class="report-grid-table"><thead><tr>`;
+      html += `<th class="sticky-col">Student Name</th><th>Room</th>`;
+
+      // Header day columns
+      for (let d = 1; d <= data.numDays; d++) {
+        html += `<th>${d}</th>`;
+      }
+      html += `<th>P</th><th>A</th><th>%</th>`;
+      html += `</tr></thead><tbody>`;
+
+      data.students.forEach(student => {
+        let presentCount = 0;
+        let absentCount = 0;
+
+        html += `<tr>`;
+        html += `<td class="sticky-col"><strong>${escapeHTML(student.name)}</strong></td>`;
+        html += `<td>${escapeHTML(student.room_no)}</td>`;
+
+        for (let d = 1; d <= data.numDays; d++) {
+          const status = student.days[d]; // 'P' or 'A' or undefined
+          if (status === "P") {
+            html += `<td><span class="day-cell present">P</span></td>`;
+            presentCount++;
+          } else if (status === "A") {
+            html += `<td><span class="day-cell absent">A</span></td>`;
+            absentCount++;
+          } else {
+            html += `<td><span class="day-cell empty">-</span></td>`;
+          }
+        }
+
+        const totalMarked = presentCount + absentCount;
+        const percentage = totalMarked > 0 ? Math.round((presentCount / totalMarked) * 100) : 0;
+
+        html += `<td style="font-weight: 700; color: var(--success);">${presentCount}</td>`;
+        html += `<td style="font-weight: 700; color: var(--danger);">${absentCount}</td>`;
+        html += `<td style="font-weight: 700;">${percentage}%</td>`;
+        html += `</tr>`;
+      });
+
+      html += `</tbody></table></div>`;
+      gridArea.innerHTML = html;
+
+    } catch (err) {
+      gridArea.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">⚠️</div>
+          <p>Error loading ledger grid. Server offline.</p>
+        </div>`;
+    }
+  }
+
+  // ---- Load Student Dropdown ----
+  async function loadStudentDropdown() {
+    try {
+      const res = await fetch(API + "/students");
+      const data = await res.json();
+      const select = document.getElementById("student-select");
+
+      // Reset
+      select.innerHTML = '<option value="">-- Select Student --</option>';
+
+      if (data.success && data.data.length > 0) {
+        data.data.forEach((s) => {
+          const option = document.createElement("option");
+          option.value = s.id;
+          option.textContent = `${s.name} (Room ${s.room_no})`;
+          select.appendChild(option);
+        });
+      }
+    } catch (err) {
+      console.error("Error loading student dropdown:", err);
+    }
+  }
+
+  // ---- Mark Manual Attendance Override ----
+  async function markAttendance(e) {
+    e.preventDefault();
+    const btn = document.getElementById("mark-btn");
+    const student_id = document.getElementById("student-select").value;
+    const status = document.getElementById("status-select").value;
+
+    if (!student_id) {
+      showToast("Please select a student", "error");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      const res = await fetch(API + "/attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: Number(student_id), status }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Attendance override recorded!", "success");
+        document.getElementById("student-select").value = "";
+        loadDailyLogs();
+      } else {
+        showToast(data.message || "Error saving override", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Mark Override";
+    }
+  }
+
+  // ---- Load Daily Sign-in Log Records ----
+  async function loadDailyLogs() {
+    try {
+      const res = await fetch(API + "/attendance");
+      const data = await res.json();
+
+      const todayStr = new Date().toISOString().split("T")[0];
+      let todayCount = 0;
+
+      if (!data.success || data.data.length === 0) {
+        document.getElementById("record-count").textContent = "No log records found";
+        document.getElementById("today-stats").textContent = "0";
+        document.getElementById("attendance-table-area").innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <p>No daily attendance logs yet. Students will appear here as they check in.</p>
+          </div>`;
+        return;
+      }
+
+      // Count today's sign-ins
+      data.data.forEach(r => {
+        const itemDateStr = new Date(r.date).toISOString().split("T")[0];
+        if (itemDateStr === todayStr && r.status === "Present") {
+          todayCount++;
+        }
+      });
+      document.getElementById("today-stats").textContent = todayCount;
+      document.getElementById("record-count").textContent = `${data.data.length} total sign-in log record(s)`;
+
+      let html = `<div class="table-wrapper"><table>
+        <thead><tr>
+          <th>Date</th><th>Student Name</th><th>Room</th><th>Status</th><th>Verification Method</th><th>Geolocated</th>
+        </tr></thead><tbody>`;
+
+      data.data.forEach((r) => {
+        const badgeClass = r.status === "Present" ? "badge-present" : "badge-absent";
+        const dateStr = new Date(r.date).toLocaleDateString("en-IN", {
+          year: "numeric", month: "short", day: "numeric"
+        });
+        const geoBadge = r.geofenced
+          ? '<span class="badge-outline badge-outline-success">YES</span>'
+          : '<span class="badge-outline">NO</span>';
+        
+        html += `<tr>
+          <td>${dateStr}</td>
+          <td><strong>${escapeHTML(r.student_name)}</strong></td>
+          <td><span class="badge-outline badge-outline-success">${escapeHTML(String(r.room_no))}</span></td>
+          <td><span class="badge ${badgeClass}">${r.status}</span></td>
+          <td><span style="font-size: 0.85rem; font-weight: 500;">📱 ${escapeHTML(r.method)}</span></td>
+          <td>${geoBadge}</td>
+        </tr>`;
+      });
+
+      html += "</tbody></table></div>";
+      document.getElementById("attendance-table-area").innerHTML = html;
+    } catch (err) {
+      document.getElementById("attendance-table-area").innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">⚠️</div>
+          <p>Cannot connect to server. Is it running?</p>
+        </div>`;
+    }
+  }
+
+  // ---- Helpers ----
+  function escapeHTML(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function showToast(message, type) {
+    const existing = document.querySelector(".toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "toast toast-" + type;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  // Initial Execution
+  updateTimeWindowStatus();
+  setInterval(updateTimeWindowStatus, 60000);
+  fetchWardenPIN();
+  loadStudentDropdown();
+  loadDailyLogs();
+</script>
+
+</body>
+</html>

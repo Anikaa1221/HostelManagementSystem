@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Hostel Management System — Room Allocation" />
+  <title>Rooms — Hostel Management</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="navbar-brand">🏠 Hostel Manager</div>
+  <div class="navbar-links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="students.html">Students</a>
+    <a href="attendance.html">Attendance</a>
+    <a href="rooms.html" class="active">Rooms</a>
+    <a href="complaints.html">Complaints</a>
+    <a href="visitors.html">Visitors</a>
+    <a href="fees.html">Fees</a>
+  </div>
+  <div class="user-badge">
+    <div class="user-avatar" id="user-avatar">A</div>
+    <span id="user-name">Admin</span>
+    <button class="btn btn-ghost" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<!-- Content -->
+<div class="container">
+  <div class="section-header">
+    <h1>Room Allocation</h1>
+  </div>
+
+  <!-- Room Stats Overview -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <h3>Total Rooms</h3>
+      <div class="value" id="stat-total-rooms">-</div>
+      <div class="stat-desc">Configured rooms</div>
+    </div>
+    <div class="stat-card">
+      <h3>Beds Configured</h3>
+      <div class="value" id="stat-total-beds">-</div>
+      <div class="stat-desc">Total capacity</div>
+    </div>
+    <div class="stat-card">
+      <h3>Beds Occupied</h3>
+      <div class="value" id="stat-occupied-beds">-</div>
+      <div class="stat-desc">Students allocated</div>
+    </div>
+    <div class="stat-card">
+      <h3>Beds Available</h3>
+      <div class="value" id="stat-available-beds">-</div>
+      <div class="stat-desc">Empty beds remaining</div>
+    </div>
+  </div>
+
+  <!-- Add Room & Allocate Forms Row -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 28px;">
+    <!-- Add Room Form -->
+    <div class="card">
+      <h2>Configure New Room</h2>
+      <p class="subtitle">Add a new room to the hostel grid</p>
+      <form id="room-form" onsubmit="addRoom(event)">
+        <div class="form-group">
+          <label for="room_no">Room Number</label>
+          <input id="room_no" type="text" placeholder="e.g. 104" required />
+        </div>
+        <div class="form-group">
+          <label for="capacity">Bed Capacity</label>
+          <input id="capacity" type="number" min="1" max="10" placeholder="e.g. 2" required />
+        </div>
+        <div class="form-group">
+          <label for="type">Room Type</label>
+          <select id="type" required>
+            <option value="AC">AC</option>
+            <option value="Non-AC">Non-AC</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary" id="add-room-btn">Create Room</button>
+      </form>
+    </div>
+
+    <!-- Allocate Student Form -->
+    <div class="card">
+      <h2>Allocate Student to Bed</h2>
+      <p class="subtitle">Assign a pre-registered student to a room</p>
+      <form id="allocate-form" onsubmit="allocateStudent(event)">
+        <div class="form-group">
+          <label for="student-select">Select Student</label>
+          <select id="student-select" required>
+            <option value="">-- Loading Students --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="room-select">Select Room</label>
+          <select id="room-select" required>
+            <option value="">-- Loading Rooms --</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary" id="allocate-btn">Allocate Room</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Rooms Status Ledger Table -->
+  <div class="card" style="margin-bottom: 28px;">
+    <h2>Room Ledger</h2>
+    <p class="subtitle">List of rooms, types, occupant counts, and residents list.</p>
+    <div id="rooms-table-area">
+      <div class="empty-state">
+        <div class="empty-state-icon">⏳</div>
+        <p>Loading room details...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Unallocated Students -->
+  <div class="card">
+    <h2>Unallocated Students</h2>
+    <p class="subtitle">Students pre-registered in the system but not yet assigned to any room.</p>
+    <div id="unallocated-table-area">
+      <div class="empty-state">
+        <div class="empty-state-icon">⏳</div>
+        <p>Checking unallocated list...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = "http://localhost:3000";
+
+  // Auth guard
+  const userData = localStorage.getItem("hostel_user");
+  if (!userData) {
+    window.location.href = "login.html";
+  } else {
+    const user = JSON.parse(userData);
+    if (user.role !== "admin") {
+      window.location.href = "student-dashboard.html";
+    }
+    document.getElementById("user-name").textContent = user.username;
+    document.getElementById("user-avatar").textContent = user.username.charAt(0).toUpperCase();
+  }
+
+  function logout() {
+    localStorage.removeItem("hostel_user");
+    window.location.href = "login.html";
+  }
+
+  // Load Rooms and Student Dropdowns
+  async function loadData() {
+    try {
+      // 1. Fetch Rooms
+      const resRooms = await fetch(API + "/rooms");
+      const roomsData = await resRooms.json();
+
+      // 2. Fetch Students
+      const resStuds = await fetch(API + "/students");
+      const studsData = await resStuds.json();
+
+      if (!roomsData.success || !studsData.success) {
+        showToast("Error fetching database records", "error");
+        return;
+      }
+
+      const rooms = roomsData.data;
+      const students = studsData.data;
+
+      // Calculate Stats
+      let totalBeds = 0;
+      let occupiedBeds = 0;
+      rooms.forEach(r => {
+        totalBeds += r.capacity;
+        occupiedBeds += r.occupant_count;
+      });
+
+      document.getElementById("stat-total-rooms").textContent = rooms.length;
+      document.getElementById("stat-total-beds").textContent = totalBeds;
+      document.getElementById("stat-occupied-beds").textContent = occupiedBeds;
+      document.getElementById("stat-available-beds").textContent = (totalBeds - occupiedBeds);
+
+      // Populate Rooms Dropdown (show only rooms with vacancy)
+      const roomSelect = document.getElementById("room-select");
+      roomSelect.innerHTML = '<option value="">-- Select Vacant Room --</option>';
+      rooms.forEach(r => {
+        const spaceLeft = r.capacity - r.occupant_count;
+        if (spaceLeft > 0) {
+          const option = document.createElement("option");
+          option.value = r.room_no;
+          option.textContent = `Room ${r.room_no} (${r.type}) — ${spaceLeft} bed(s) empty`;
+          roomSelect.appendChild(option);
+        }
+      });
+
+      // Populate Students Dropdown (both unallocated, and optionally allocated for transfer)
+      const studentSelect = document.getElementById("student-select");
+      studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
+      students.forEach(s => {
+        const option = document.createElement("option");
+        option.value = s.id;
+        const currentLoc = s.room_no && s.room_no !== "Unallocated" ? `Room ${s.room_no}` : "No Room";
+        option.textContent = `${s.name} (${s.dept}) [Currently: ${currentLoc}]`;
+        studentSelect.appendChild(option);
+      });
+
+      // Render Rooms Ledger Table
+      // For each room, let's group matching students from students list
+      let roomsHtml = `<div class="table-wrapper"><table>
+        <thead><tr>
+          <th>Room No</th><th>Type</th><th>Capacity</th><th>Status</th><th>Residents</th><th>Actions</th>
+        </tr></thead><tbody>`;
+
+      rooms.forEach(r => {
+        // Find residents of this room
+        const residents = students.filter(s => s.room_no === r.room_no).map(s => s.name);
+        const residentsList = residents.length > 0 
+          ? residents.map(name => `<strong style="display:block;">👤 ${escapeHTML(name)}</strong>`).join("") 
+          : '<em style="color:var(--text-muted);">None</em>';
+        
+        const badgeClass = r.status === "Available" ? "badge-present" : "badge-absent";
+
+        roomsHtml += `<tr>
+          <td><span style="font-size: 1.1rem; font-weight: 700; color: var(--accent);">Room ${r.room_no}</span></td>
+          <td>${r.type}</td>
+          <td><strong>${r.occupant_count} / ${r.capacity}</strong></td>
+          <td><span class="badge ${badgeClass}">${r.status}</span></td>
+          <td>${residentsList}</td>
+          <td>
+            <button class="btn btn-danger" onclick="deleteRoom('${r.room_no}')" ${r.occupant_count > 0 ? "disabled" : ""}>Delete Room</button>
+          </td>
+        </tr>`;
+      });
+      roomsHtml += "</tbody></table></div>";
+      document.getElementById("rooms-table-area").innerHTML = roomsHtml;
+
+      // Render Unallocated Students Table
+      const unallocated = students.filter(s => !s.room_no || s.room_no === "Unallocated");
+      if (unallocated.length === 0) {
+        document.getElementById("unallocated-table-area").innerHTML = `
+          <div class="empty-state" style="padding: 24px;">
+            <div class="empty-state-icon">🎉</div>
+            <p>All pre-registered students have been allocated a room!</p>
+          </div>`;
+      } else {
+        let unHtml = `<div class="table-wrapper"><table>
+          <thead><tr>
+            <th>ID</th><th>Name</th><th>Email</th><th>Dept</th><th>Actions</th>
+          </tr></thead><tbody>`;
+        
+        unallocated.forEach(s => {
+          unHtml += `<tr>
+            <td>${s.id}</td>
+            <td><strong>${escapeHTML(s.name)}</strong></td>
+            <td>${escapeHTML(s.email)}</td>
+            <td>${escapeHTML(s.dept || "-")}</td>
+            <td>
+              <button class="btn btn-outline" onclick="focusAllocation(${s.id})">Allocate Now</button>
+            </td>
+          </tr>`;
+        });
+        unHtml += "</tbody></table></div>";
+        document.getElementById("unallocated-table-area").innerHTML = unHtml;
+      }
+
+    } catch (err) {
+      document.getElementById("rooms-table-area").innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">⚠️</div>
+          <p>Cannot connect to server. Is it running?</p>
+        </div>`;
+    }
+  }
+
+  // Focus allocation form on a student
+  function focusAllocation(studentId) {
+    document.getElementById("student-select").value = studentId;
+    document.getElementById("student-select").scrollIntoView({ behavior: "smooth" });
+  }
+
+  // Add Room
+  async function addRoom(e) {
+    e.preventDefault();
+    const btn = document.getElementById("add-room-btn");
+    const room_no = document.getElementById("room_no").value.trim();
+    const capacity = document.getElementById("capacity").value;
+    const type = document.getElementById("type").value;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      const res = await fetch(API + "/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ room_no, capacity: Number(capacity), type })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Room added successfully!", "success");
+        document.getElementById("room-form").reset();
+        loadData();
+      } else {
+        showToast(data.message || "Error adding room", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Create Room";
+    }
+  }
+
+  // Delete Room
+  async function deleteRoom(room_no) {
+    if (!confirm(`Are you sure you want to delete Room ${room_no}?`)) return;
+
+    try {
+      const res = await fetch(API + `/rooms/${room_no}`, { method: "DELETE" });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Room deleted!", "success");
+        loadData();
+      } else {
+        showToast(data.message || "Error deleting room", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    }
+  }
+
+  // Allocate Student
+  async function allocateStudent(e) {
+    e.preventDefault();
+    const btn = document.getElementById("allocate-btn");
+    const student_id = document.getElementById("student-select").value;
+    const room_no = document.getElementById("room-select").value;
+
+    if (!student_id || !room_no) {
+      showToast("Select student and room", "error");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      const res = await fetch(API + "/rooms/allocate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: Number(student_id), room_no })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Room allocated successfully!", "success");
+        loadData();
+      } else {
+        showToast(data.message || "Allocation failed", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Allocate Room";
+    }
+  }
+
+  // Helpers
+  function escapeHTML(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function showToast(message, type) {
+    const existing = document.querySelector(".toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "toast toast-" + type;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  // Initial load
+  loadData();
+</script>
+</body>
+</html>

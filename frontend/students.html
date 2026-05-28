@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Hostel Management System — Manage Students" />
+  <title>Students — Hostel Management</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="navbar-brand">🏠 Hostel Manager</div>
+  <div class="navbar-links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="students.html" class="active">Students</a>
+    <a href="attendance.html">Attendance</a>
+    <a href="rooms.html">Rooms</a>
+    <a href="complaints.html">Complaints</a>
+    <a href="visitors.html">Visitors</a>
+    <a href="fees.html">Fees</a>
+  </div>
+  <div class="user-badge">
+    <div class="user-avatar" id="user-avatar">A</div>
+    <span id="user-name">Admin</span>
+    <button class="btn btn-ghost" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<!-- Content -->
+<div class="container">
+  <div class="section-header">
+    <h1>Student Monitoring</h1>
+  </div>
+
+  <!-- Add Student Form -->
+  <div class="card" style="margin-bottom: 28px;">
+    <h2>Pre-Register New Student</h2>
+    <p class="subtitle">Pre-register student profiles. Students will link their user account using their email address.</p>
+    <form id="add-form" onsubmit="addStudent(event)">
+      <div class="form-row" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+        <div class="form-group">
+          <label for="name">Full Name</label>
+          <input id="name" type="text" placeholder="e.g. Anika Sharma" required />
+        </div>
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="e.g. anika@email.com" required />
+        </div>
+        <div class="form-group">
+          <label for="phone">Phone No.</label>
+          <input id="phone" type="text" placeholder="e.g. 9876543210" required />
+        </div>
+        <div class="form-group">
+          <label for="dept">Department</label>
+          <input id="dept" type="text" placeholder="e.g. CSE" required />
+        </div>
+        <div class="form-group">
+          <label for="room">Room No.</label>
+          <input id="room" type="text" placeholder="e.g. 101" required />
+        </div>
+        <div class="form-group">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn btn-primary" id="add-btn">Add Student</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Student List -->
+  <div class="card">
+    <h2>All Students</h2>
+    <p class="subtitle" id="student-count">Loading...</p>
+    <div id="student-table-area">
+      <div class="empty-state">
+        <div class="empty-state-icon">⏳</div>
+        <p>Loading students...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="edit-modal" class="modal-overlay" style="display: none;">
+  <div class="modal">
+    <h2>Edit Student Profile</h2>
+    <form onsubmit="saveEdit(event)">
+      <input type="hidden" id="edit-id" />
+      <div class="form-group">
+        <label for="edit-name">Full Name</label>
+        <input id="edit-name" type="text" required />
+      </div>
+      <div class="form-group">
+        <label for="edit-email">Email</label>
+        <input id="edit-email" type="email" required />
+      </div>
+      <div class="form-group">
+        <label for="edit-phone">Phone No.</label>
+        <input id="edit-phone" type="text" required />
+      </div>
+      <div class="form-group">
+        <label for="edit-dept">Department</label>
+        <input id="edit-dept" type="text" required />
+      </div>
+      <div class="form-group">
+        <label for="edit-room">Room No.</label>
+        <input id="edit-room" type="text" required />
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="save-btn">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const API = "http://localhost:3000";
+
+  // Auth guard
+  const userData = localStorage.getItem("hostel_user");
+  if (!userData) {
+    window.location.href = "login.html";
+  } else {
+    const user = JSON.parse(userData);
+    if (user.role !== "admin") {
+      window.location.href = "student-dashboard.html";
+    }
+    document.getElementById("user-name").textContent = user.username;
+    document.getElementById("user-avatar").textContent = user.username.charAt(0).toUpperCase();
+  }
+
+  function logout() {
+    localStorage.removeItem("hostel_user");
+    window.location.href = "login.html";
+  }
+
+  // ---- Load Students ----
+  async function loadStudents() {
+    try {
+      const res = await fetch(API + "/students");
+      const data = await res.json();
+
+      if (!data.success || data.data.length === 0) {
+        document.getElementById("student-count").textContent = "No students registered yet";
+        document.getElementById("student-table-area").innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <p>No students found. Add one above!</p>
+          </div>`;
+        return;
+      }
+
+      document.getElementById("student-count").textContent = `${data.data.length} student(s) registered`;
+
+      let html = `<div class="table-wrapper"><table>
+        <thead><tr>
+          <th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Dept</th><th>Room</th><th>Account Link</th><th>Actions</th>
+        </tr></thead><tbody>`;
+
+      data.data.forEach((s) => {
+        const linkBadge = s.user_account_id
+          ? '<span class="badge badge-present">Active</span>'
+          : '<span class="badge badge-absent">Pending</span>';
+        
+        html += `<tr>
+          <td>${s.id}</td>
+          <td><strong>${escapeHTML(s.name)}</strong></td>
+          <td>${escapeHTML(s.email)}</td>
+          <td>${escapeHTML(s.ph_no || "-")}</td>
+          <td>${escapeHTML(s.dept || "-")}</td>
+          <td><span class="badge-outline badge-outline-success">${escapeHTML(String(s.room_no))}</span></td>
+          <td>${linkBadge}</td>
+          <td class="actions">
+            <button class="btn btn-outline" onclick='openEdit(${JSON.stringify(s)})'>Edit</button>
+            <button class="btn btn-danger" onclick="deleteStudent(${s.id}, '${escapeHTML(s.name)}')">Delete</button>
+          </td>
+        </tr>`;
+      });
+
+      html += "</tbody></table></div>";
+      document.getElementById("student-table-area").innerHTML = html;
+    } catch (err) {
+      document.getElementById("student-table-area").innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">⚠️</div>
+          <p>Cannot connect to server. Is it running?</p>
+        </div>`;
+    }
+  }
+
+  // ---- Add Student ----
+  async function addStudent(e) {
+    e.preventDefault();
+    const btn = document.getElementById("add-btn");
+    const name = document.getElementById("name").value.trim();
+    const email = document.getElementById("email").value.trim();
+    const phone = document.getElementById("phone").value.trim();
+    const dept = document.getElementById("dept").value.trim();
+    const room = document.getElementById("room").value.trim();
+
+    if (!name || !email || !phone || !dept || !room) {
+      showToast("Please fill all fields", "error");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      const res = await fetch(API + "/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, ph_no: phone, dept, room_no: room }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Student pre-registered successfully!", "success");
+        document.getElementById("add-form").reset();
+        loadStudents();
+      } else {
+        showToast(data.message || "Error adding student", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Add Student";
+    }
+  }
+
+  // ---- Edit Student ----
+  function openEdit(student) {
+    document.getElementById("edit-id").value = student.id;
+    document.getElementById("edit-name").value = student.name;
+    document.getElementById("edit-email").value = student.email;
+    document.getElementById("edit-phone").value = student.ph_no || "";
+    document.getElementById("edit-dept").value = student.dept || "";
+    document.getElementById("edit-room").value = student.room_no;
+    document.getElementById("edit-modal").style.display = "flex";
+  }
+
+  function closeModal() {
+    document.getElementById("edit-modal").style.display = "none";
+  }
+
+  async function saveEdit(e) {
+    e.preventDefault();
+    const btn = document.getElementById("save-btn");
+    const id = document.getElementById("edit-id").value;
+    const name = document.getElementById("edit-name").value.trim();
+    const email = document.getElementById("edit-email").value.trim();
+    const phone = document.getElementById("edit-phone").value.trim();
+    const dept = document.getElementById("edit-dept").value.trim();
+    const room = document.getElementById("edit-room").value.trim();
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      const res = await fetch(API + `/students/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, ph_no: phone, dept, room_no: room }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Student updated!", "success");
+        closeModal();
+        loadStudents();
+      } else {
+        showToast(data.message || "Error updating student", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Save Changes";
+    }
+  }
+
+  // ---- Delete Student ----
+  async function deleteStudent(id, name) {
+    if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+
+    try {
+      const res = await fetch(API + `/students/${id}`, { method: "DELETE" });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Student deleted", "success");
+        loadStudents();
+      } else {
+        showToast(data.message || "Error deleting student", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    }
+  }
+
+  // ---- Helpers ----
+  function escapeHTML(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function showToast(message, type) {
+    const existing = document.querySelector(".toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "toast toast-" + type;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  // Initial load
+  loadStudents();
+</script>
+
+</body>
+</html>

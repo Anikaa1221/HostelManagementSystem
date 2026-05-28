@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Hostel Management System — Review Complaints & Leaves" />
+  <title>Warden Review Office — Hostel Management</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="navbar-brand">🏠 Hostel Manager</div>
+  <div class="navbar-links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="students.html">Students</a>
+    <a href="attendance.html">Attendance</a>
+    <a href="rooms.html">Rooms</a>
+    <a href="complaints.html" class="active">Complaints</a>
+    <a href="visitors.html">Visitors</a>
+    <a href="fees.html">Fees</a>
+  </div>
+  <div class="user-badge">
+    <div class="user-avatar" id="user-avatar">A</div>
+    <span id="user-name">Admin</span>
+    <button class="btn btn-ghost" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<!-- Content -->
+<div class="container">
+  <div class="section-header">
+    <h1>Warden Review Office</h1>
+    
+    <!-- Mode selector (Complaints vs Leaves) -->
+    <div class="tab-toggle" style="margin-bottom: 0;">
+      <button id="mode-complaints" class="active" onclick="switchMode('Complaints')">Student Complaints</button>
+      <button id="mode-leaves" onclick="switchMode('Leaves')">Leave Applications</button>
+    </div>
+  </div>
+
+  <!-- Complaints Section -->
+  <div id="section-complaints">
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>Total Grievances</h3>
+        <div class="value" id="stat-total-complaints">-</div>
+        <div class="stat-desc">All time submitted</div>
+      </div>
+      <div class="stat-card">
+        <h3>Pending Review</h3>
+        <div class="value" id="stat-pending-complaints" style="color: var(--danger);">-</div>
+        <div class="stat-desc">Awaiting Warden response</div>
+      </div>
+      <div class="stat-card">
+        <h3>In Progress</h3>
+        <div class="value" id="stat-progress-complaints" style="color: var(--warning);">-</div>
+        <div class="stat-desc">Work scheduled</div>
+      </div>
+      <div class="stat-card">
+        <h3>Resolved</h3>
+        <div class="value" id="stat-resolved-complaints" style="color: var(--success);">-</div>
+        <div class="stat-desc">Closed cases</div>
+      </div>
+    </div>
+
+    <!-- Table Card -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+        <h2>Complaints Ledger</h2>
+        <!-- Filters -->
+        <div class="tab-toggle" style="margin-bottom:0; font-size:0.8rem;">
+          <button id="filter-c-all" class="active" onclick="filterComplaints('All')" style="padding:6px 12px;">All</button>
+          <button id="filter-c-pending" onclick="filterComplaints('Pending')" style="padding:6px 12px;">Pending</button>
+          <button id="filter-c-inprogress" onclick="filterComplaints('In Progress')" style="padding:6px 12px;">In Progress</button>
+          <button id="filter-c-resolved" onclick="filterComplaints('Resolved')" style="padding:6px 12px;">Resolved</button>
+        </div>
+      </div>
+      
+      <div id="complaints-table-area">
+        <div class="empty-state">
+          <p>Loading complaints...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaves Section -->
+  <div id="section-leaves" style="display: none;">
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>Total Applications</h3>
+        <div class="value" id="stat-total-leaves">-</div>
+        <div class="stat-desc">All outing logs</div>
+      </div>
+      <div class="stat-card">
+        <h3>Awaiting Approval</h3>
+        <div class="value" id="stat-pending-leaves" style="color: var(--warning);">-</div>
+        <div class="stat-desc">Pending decision</div>
+      </div>
+      <div class="stat-card">
+        <h3>Approved</h3>
+        <div class="value" id="stat-approved-leaves" style="color: var(--success);">-</div>
+        <div class="stat-desc">Outings authorized</div>
+      </div>
+      <div class="stat-card">
+        <h3>Rejected / Cancelled</h3>
+        <div class="value" id="stat-rejected-leaves" style="color: var(--danger);">-</div>
+        <div class="stat-desc">Requests denied</div>
+      </div>
+    </div>
+
+    <!-- Table Card -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+        <h2>Leave Registry</h2>
+        <div class="tab-toggle" style="margin-bottom:0;">
+          <button id="filter-l-all" class="active" onclick="filterLeaves('All')" style="padding:6px 12px;">All</button>
+          <button id="filter-l-pending" onclick="filterLeaves('Pending')" style="padding:6px 12px;">Pending</button>
+          <button id="filter-l-approved" onclick="filterLeaves('Approved')" style="padding:6px 12px;">Approved</button>
+          <button id="filter-l-rejected" onclick="filterLeaves('Rejected')" style="padding:6px 12px;">Rejected</button>
+        </div>
+      </div>
+
+      <div id="leaves-table-area">
+        <div class="empty-state">
+          <p>Loading leave applications...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = "http://localhost:3000";
+  let complaintsList = [];
+  let leavesList = [];
+  let activeMode = "Complaints";
+  let activeComplaintsFilter = "All";
+  let activeLeavesFilter = "All";
+
+  // Auth guard
+  const userData = localStorage.getItem("hostel_user");
+  if (!userData) {
+    window.location.href = "login.html";
+  } else {
+    const user = JSON.parse(userData);
+    if (user.role !== "admin") {
+      window.location.href = "student-dashboard.html";
+    }
+    document.getElementById("user-name").textContent = user.username;
+    document.getElementById("user-avatar").textContent = user.username.charAt(0).toUpperCase();
+  }
+
+  function logout() {
+    localStorage.removeItem("hostel_user");
+    window.location.href = "login.html";
+  }
+
+  // Switch Mode (Complaints vs Leaves)
+  function switchMode(mode) {
+    activeMode = mode;
+    document.getElementById("mode-complaints").classList.toggle("active", mode === "Complaints");
+    document.getElementById("mode-leaves").classList.toggle("active", mode === "Leaves");
+    
+    document.getElementById("section-complaints").style.display = mode === "Complaints" ? "block" : "none";
+    document.getElementById("section-leaves").style.display = mode === "Leaves" ? "block" : "none";
+
+    if (mode === "Complaints") {
+      loadComplaints();
+    } else {
+      loadLeaves();
+    }
+  }
+
+  // ---- COMPLAINTS MODULE ----
+  async function loadComplaints() {
+    try {
+      const res = await fetch(API + "/complaints");
+      const data = await res.json();
+      if (data.success) {
+        complaintsList = data.data;
+        updateComplaintsStats();
+        renderComplaints();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function updateComplaintsStats() {
+    document.getElementById("stat-total-complaints").textContent = complaintsList.length;
+    document.getElementById("stat-pending-complaints").textContent = complaintsList.filter(c => c.status === "Pending").length;
+    document.getElementById("stat-progress-complaints").textContent = complaintsList.filter(c => c.status === "In Progress").length;
+    document.getElementById("stat-resolved-complaints").textContent = complaintsList.filter(c => c.status === "Resolved").length;
+  }
+
+  function filterComplaints(status) {
+    activeComplaintsFilter = status;
+    document.getElementById("filter-c-all").classList.toggle("active", status === "All");
+    document.getElementById("filter-c-pending").classList.toggle("active", status === "Pending");
+    document.getElementById("filter-c-inprogress").classList.toggle("active", status === "In Progress");
+    document.getElementById("filter-c-resolved").classList.toggle("active", status === "Resolved");
+    renderComplaints();
+  }
+
+  function renderComplaints() {
+    const filtered = activeComplaintsFilter === "All"
+      ? complaintsList
+      : complaintsList.filter(c => c.status === activeComplaintsFilter);
+
+    const area = document.getElementById("complaints-table-area");
+    if (filtered.length === 0) {
+      area.innerHTML = `<div class="empty-state"><p>No complaints found matching "${activeComplaintsFilter}"</p></div>`;
+      return;
+    }
+
+    let html = `<div class="table-wrapper"><table>
+      <thead><tr>
+        <th>Date</th><th>Student</th><th>Room</th><th>Description</th><th>Status</th><th>Actions</th>
+      </tr></thead><tbody>`;
+
+    filtered.forEach(c => {
+      let badge = "badge-outline";
+      if (c.status === "Pending") badge += " badge-outline-danger";
+      else if (c.status === "In Progress") badge += " badge-outline-warning";
+      else if (c.status === "Resolved") badge += " badge-outline-success";
+
+      html += `<tr>
+        <td>${new Date(c.date).toLocaleDateString("en-IN")}</td>
+        <td><strong>${escapeHTML(c.student_name)}</strong></td>
+        <td><span class="badge-outline">${escapeHTML(String(c.room_no))}</span></td>
+        <td>${escapeHTML(c.description)}</td>
+        <td><span class="${badge}">${c.status}</span></td>
+        <td class="actions">
+          ${c.status === "Pending" ? `<button class="btn btn-outline" onclick="updateComplaintStatus(${c.id}, 'In Progress')">Schedule</button>` : ""}
+          ${c.status !== "Resolved" ? `<button class="btn btn-primary" onclick="updateComplaintStatus(${c.id}, 'Resolved')" style="padding:6px 12px; font-size:0.8rem; width:auto;">Resolve</button>` : `<span style="color:var(--success); font-weight:600;">✓ Resolved</span>`}
+        </td>
+      </tr>`;
+    });
+    html += "</tbody></table></div>";
+    area.innerHTML = html;
+  }
+
+  async function updateComplaintStatus(id, status) {
+    try {
+      const res = await fetch(API + `/complaints/${id}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Complaint status updated", "success");
+        loadComplaints();
+      }
+    } catch (err) {
+      showToast("Server error", "error");
+    }
+  }
+
+  // ---- LEAVES MODULE ----
+  async function loadLeaves() {
+    try {
+      const res = await fetch(API + "/leaves");
+      const data = await res.json();
+      if (data.success) {
+        leavesList = data.data;
+        updateLeavesStats();
+        renderLeaves();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function updateLeavesStats() {
+    document.getElementById("stat-total-leaves").textContent = leavesList.length;
+    document.getElementById("stat-pending-leaves").textContent = leavesList.filter(l => l.status === "Pending").length;
+    document.getElementById("stat-approved-leaves").textContent = leavesList.filter(l => l.status === "Approved").length;
+    document.getElementById("stat-rejected-leaves").textContent = leavesList.filter(l => l.status === "Rejected").length;
+  }
+
+  function filterLeaves(status) {
+    activeLeavesFilter = status;
+    document.getElementById("filter-l-all").classList.toggle("active", status === "All");
+    document.getElementById("filter-l-pending").classList.toggle("active", status === "Pending");
+    document.getElementById("filter-l-approved").classList.toggle("active", status === "Approved");
+    document.getElementById("filter-l-rejected").classList.toggle("active", status === "Rejected");
+    renderLeaves();
+  }
+
+  function renderLeaves() {
+    const filtered = activeLeavesFilter === "All"
+      ? leavesList
+      : leavesList.filter(l => l.status === activeLeavesFilter);
+
+    const area = document.getElementById("leaves-table-area");
+    if (filtered.length === 0) {
+      area.innerHTML = `<div class="empty-state"><p>No leave applications matching "${activeLeavesFilter}"</p></div>`;
+      return;
+    }
+
+    let html = `<div class="table-wrapper"><table>
+      <thead><tr>
+        <th>Dates</th><th>Student</th><th>Room</th><th>Outing Reason</th><th>Status</th><th>Actions</th>
+      </tr></thead><tbody>`;
+
+    filtered.forEach(l => {
+      let badge = "badge-outline";
+      if (l.status === "Pending") badge += " badge-outline-warning";
+      else if (l.status === "Approved") badge += " badge-outline-success";
+      else if (l.status === "Rejected") badge += " badge-outline-danger";
+
+      const fromStr = new Date(l.from_date).toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+      const toStr = new Date(l.to_date).toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+
+      html += `<tr>
+        <td><strong>${fromStr} - ${toStr}</strong></td>
+        <td><strong>${escapeHTML(l.student_name)}</strong></td>
+        <td><span class="badge-outline">${escapeHTML(String(l.room_no))}</span></td>
+        <td>${escapeHTML(l.reason)}</td>
+        <td><span class="${badge}">${l.status}</span></td>
+        <td class="actions">
+          ${l.status === "Pending" ? `
+            <button class="btn btn-primary" onclick="updateLeaveStatus(${l.id}, 'Approved')" style="padding:6px 12px; font-size:0.8rem; width:auto; background:var(--success);">Approve</button>
+            <button class="btn btn-danger" onclick="updateLeaveStatus(${l.id}, 'Rejected')" style="padding:6px 12px; font-size:0.8rem; width:auto;">Reject</button>
+          ` : `<span style="font-size:0.85rem; font-weight:600;">Handled</span>`}
+        </td>
+      </tr>`;
+    });
+    html += "</tbody></table></div>";
+    area.innerHTML = html;
+  }
+
+  async function updateLeaveStatus(id, status) {
+    try {
+      const res = await fetch(API + `/leaves/${id}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Leave application marked as "${status}"`, "success");
+        loadLeaves();
+      }
+    } catch (err) {
+      showToast("Server error", "error");
+    }
+  }
+
+  // Helpers
+  function escapeHTML(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function showToast(message, type) {
+    const existing = document.querySelector(".toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "toast toast-" + type;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  // Load complaints initially
+  loadComplaints();
+</script>
+</body>
+</html>

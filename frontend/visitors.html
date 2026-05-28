@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Hostel Management System — Track Visitors" />
+  <title>Visitors — Hostel Management</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="navbar-brand">🏠 Hostel Manager</div>
+  <div class="navbar-links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="students.html">Students</a>
+    <a href="attendance.html">Attendance</a>
+    <a href="rooms.html">Rooms</a>
+    <a href="complaints.html">Complaints</a>
+    <a href="visitors.html" class="active">Visitors</a>
+    <a href="fees.html">Fees</a>
+  </div>
+  <div class="user-badge">
+    <div class="user-avatar" id="user-avatar">A</div>
+    <span id="user-name">Admin</span>
+    <button class="btn btn-ghost" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<!-- Content -->
+<div class="container">
+  <div class="section-header">
+    <h1>Visitor Tracking</h1>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <h3>Active Visitors</h3>
+      <div class="value" id="stat-active-visitors">-</div>
+      <div class="stat-desc">Currently in the hostel</div>
+    </div>
+    <div class="stat-card">
+      <h3>Total Visits logged</h3>
+      <div class="value" id="stat-total-visits">-</div>
+      <div class="stat-desc">Historical records count</div>
+    </div>
+  </div>
+
+  <!-- Log Entry Form -->
+  <div class="card" style="margin-bottom: 28px;">
+    <h2>Log New Visitor Entry</h2>
+    <p class="subtitle">Log visitor entries in the digital hostel register.</p>
+    <form id="visitor-form" onsubmit="logVisitor(event)">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="visitor-name">Visitor's Full Name</label>
+          <input id="visitor-name" type="text" placeholder="e.g. Ramesh Kumar" required />
+        </div>
+        <div class="form-group">
+          <label for="relation">Relationship</label>
+          <select id="relation" required>
+            <option value="Parent">Parent</option>
+            <option value="Sibling">Sibling</option>
+            <option value="Guardian">Guardian</option>
+            <option value="Friend">Friend</option>
+            <option value="Cousin">Cousin</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="student-select">Student Host Profile</label>
+          <select id="student-select" required>
+            <option value="">-- Load Students --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn btn-primary" id="log-btn">Log Visitor In</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Active Visitors Table -->
+  <div class="card" style="margin-bottom: 28px;">
+    <h2>Active Visitors</h2>
+    <p class="subtitle">Visitors currently inside the building. Mark checkout when they exit.</p>
+    <div id="active-table-area">
+      <div class="empty-state">
+        <div class="empty-state-icon">⏳</div>
+        <p>Loading active list...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Historical Visitor Logs -->
+  <div class="card">
+    <h2>Historical Visitor Register</h2>
+    <p class="subtitle">Complete archives of all student visitors entry and exit records.</p>
+    <div id="history-table-area">
+      <div class="empty-state">
+        <div class="empty-state-icon">⏳</div>
+        <p>Loading registry history...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = "http://localhost:3000";
+  let visitors = [];
+
+  // Auth guard
+  const userData = localStorage.getItem("hostel_user");
+  if (!userData) {
+    window.location.href = "login.html";
+  } else {
+    const user = JSON.parse(userData);
+    if (user.role !== "admin") {
+      window.location.href = "student-dashboard.html";
+    }
+    document.getElementById("user-name").textContent = user.username;
+    document.getElementById("user-avatar").textContent = user.username.charAt(0).toUpperCase();
+  }
+
+  function logout() {
+    localStorage.removeItem("hostel_user");
+    window.location.href = "login.html";
+  }
+
+  // Load students dropdown
+  async function loadStudentsDropdown() {
+    try {
+      const res = await fetch(API + "/students");
+      const data = await res.json();
+      const select = document.getElementById("student-select");
+
+      select.innerHTML = '<option value="">-- Select Student Host --</option>';
+
+      if (data.success && data.data.length > 0) {
+        data.data.forEach((s) => {
+          const option = document.createElement("option");
+          option.value = s.id;
+          option.textContent = `${s.name} (Room ${s.room_no})`;
+          select.appendChild(option);
+        });
+      }
+    } catch (err) {
+      console.error("Error loading students dropdown:", err);
+    }
+  }
+
+  // Load Visitor records
+  async function loadVisitors() {
+    try {
+      const res = await fetch(API + "/visitors");
+      const data = await res.json();
+
+      if (data.success) {
+        visitors = data.data;
+        renderLogs();
+      } else {
+        showToast("Error loading visitor registry", "error");
+      }
+    } catch (err) {
+      document.getElementById("active-table-area").innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">⚠️</div>
+          <p>Cannot connect to server. Is it running?</p>
+        </div>`;
+    }
+  }
+
+  // Render logs
+  function renderLogs() {
+    const active = visitors.filter(v => v.exit_time === null);
+    const history = visitors.filter(v => v.exit_time !== null);
+
+    document.getElementById("stat-active-visitors").textContent = active.length;
+    document.getElementById("stat-total-visits").textContent = visitors.length;
+
+    // Render Active
+    const activeArea = document.getElementById("active-table-area");
+    if (active.length === 0) {
+      activeArea.innerHTML = `
+        <div class="empty-state" style="padding: 24px;">
+          <div class="empty-state-icon">🍃</div>
+          <p>No active visitors in the hostel right now.</p>
+        </div>`;
+    } else {
+      let actHtml = `<div class="table-wrapper"><table>
+        <thead><tr>
+          <th>Visitor Name</th><th>Relationship</th><th>Student Host</th><th>Room No</th><th>Entry Time</th><th>Actions</th>
+        </tr></thead><tbody>`;
+      
+      active.forEach(v => {
+        const timeStr = new Date(v.entry_time).toLocaleString("en-IN", {
+          month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+        });
+        
+        actHtml += `<tr>
+          <td><strong>${escapeHTML(v.name)}</strong></td>
+          <td>${v.relation}</td>
+          <td>👤 ${escapeHTML(v.student_name)}</td>
+          <td><span class="badge-outline badge-outline-success">${escapeHTML(String(v.room_no))}</span></td>
+          <td>🕒 ${timeStr}</td>
+          <td>
+            <button class="btn btn-primary" onclick="checkoutVisitor(${v.id})" style="padding:6px 12px; font-size:0.8rem; width:auto;">Checkout</button>
+          </td>
+        </tr>`;
+      });
+      actHtml += "</tbody></table></div>";
+      activeArea.innerHTML = actHtml;
+    }
+
+    // Render History
+    const historyArea = document.getElementById("history-table-area");
+    if (history.length === 0) {
+      historyArea.innerHTML = `
+        <div class="empty-state" style="padding: 24px;">
+          <div class="empty-state-icon">📭</div>
+          <p>No completed visitor history logs found.</p>
+        </div>`;
+    } else {
+      let histHtml = `<div class="table-wrapper"><table>
+        <thead><tr>
+          <th>Visitor Name</th><th>Relationship</th><th>Student Host</th><th>Room No</th><th>Arrival</th><th>Departure</th>
+        </tr></thead><tbody>`;
+      
+      history.forEach(v => {
+        const arrStr = new Date(v.entry_time).toLocaleString("en-IN", {
+          month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+        });
+        const depStr = new Date(v.exit_time).toLocaleString("en-IN", {
+          month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+        });
+
+        histHtml += `<tr>
+          <td><strong>${escapeHTML(v.name)}</strong></td>
+          <td>${v.relation}</td>
+          <td>👤 ${escapeHTML(v.student_name)}</td>
+          <td><span class="badge-outline">${escapeHTML(String(v.room_no))}</span></td>
+          <td>🕒 ${arrStr}</td>
+          <td>📅 ${depStr}</td>
+        </tr>`;
+      });
+      histHtml += "</tbody></table></div>";
+      historyArea.innerHTML = histHtml;
+    }
+  }
+
+  // Log Visitor In
+  async function logVisitor(e) {
+    e.preventDefault();
+    const btn = document.getElementById("log-btn");
+    const name = document.getElementById("visitor-name").value.trim();
+    const relation = document.getElementById("relation").value;
+    const student_id = document.getElementById("student-select").value;
+
+    if (!name || !relation || !student_id) {
+      showToast("Fill in all details", "error");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      const res = await fetch(API + "/visitors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, relation, student_id: Number(student_id) })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Visitor entry logged!", "success");
+        document.getElementById("visitor-form").reset();
+        loadVisitors();
+      } else {
+        showToast(data.message || "Error logging visitor", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Log Visitor In";
+    }
+  }
+
+  // Checkout Visitor Exit
+  async function checkoutVisitor(id) {
+    try {
+      const res = await fetch(API + `/visitors/${id}/exit`, { method: "PUT" });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Visitor check-out logged!", "success");
+        loadVisitors();
+      } else {
+        showToast(data.message || "Checkout failed", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    }
+  }
+
+  // Helpers
+  function escapeHTML(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function showToast(message, type) {
+    const existing = document.querySelector(".toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "toast toast-" + type;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  // Initialize
+  loadStudentsDropdown();
+  loadVisitors();
+</script>
+</body>
+</html>

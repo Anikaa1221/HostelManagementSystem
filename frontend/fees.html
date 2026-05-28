@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Hostel Management System — Fee Tracking" />
+  <title>Fees — Hostel Management</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="navbar-brand">🏠 Hostel Manager</div>
+  <div class="navbar-links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="students.html">Students</a>
+    <a href="attendance.html">Attendance</a>
+    <a href="rooms.html">Rooms</a>
+    <a href="complaints.html">Complaints</a>
+    <a href="visitors.html">Visitors</a>
+    <a href="fees.html" class="active">Fees</a>
+  </div>
+  <div class="user-badge">
+    <div class="user-avatar" id="user-avatar">A</div>
+    <span id="user-name">Admin</span>
+    <button class="btn btn-ghost" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<!-- Content -->
+<div class="container">
+  <div class="section-header">
+    <h1>Fee Management</h1>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+    <div class="stat-card">
+      <h3>Total Amount Billed</h3>
+      <div class="value" id="stat-billed-amount">₹-</div>
+      <div class="stat-desc">All time invoices generated</div>
+    </div>
+    <div class="stat-card">
+      <h3>Total Collected</h3>
+      <div class="value" id="stat-collected-amount" style="color: var(--success);">₹-</div>
+      <div class="stat-desc">Fees received successfully</div>
+    </div>
+    <div class="stat-card">
+      <h3>Outstanding Balance</h3>
+      <div class="value" id="stat-outstanding-amount" style="color: var(--danger);">₹-</div>
+      <div class="stat-desc">Unpaid student bills</div>
+    </div>
+    <div class="stat-card">
+      <h3>Unpaid Bills</h3>
+      <div class="value" id="stat-unpaid-count">-</div>
+      <div class="stat-desc">Invoices awaiting payment</div>
+    </div>
+  </div>
+
+  <!-- Billing Invoices Form -->
+  <div class="card" style="margin-bottom: 28px;">
+    <h2>Issue New Fee Invoice</h2>
+    <p class="subtitle">Bill an individual student or issue a bulk invoice to all hostel students (e.g. Mess Fee).</p>
+    <form id="billing-form" onsubmit="issueInvoice(event)">
+      <div class="form-row" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+        <div class="form-group">
+          <label for="billing-target">Billing Target</label>
+          <select id="billing-target" onchange="toggleTargetStudent()" required>
+            <option value="all">Bulk: Bill All Students</option>
+            <option value="single">Single: Bill Specific Student</option>
+          </select>
+        </div>
+        
+        <div class="form-group" id="student-select-group" style="display: none;">
+          <label for="student-select">Select Student</label>
+          <select id="student-select">
+            <option value="">-- Load Students --</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="amount">Invoice Amount (₹)</label>
+          <input id="amount" type="number" min="1" placeholder="e.g. 5000" required />
+        </div>
+
+        <div class="form-group">
+          <label for="due-date">Due Date</label>
+          <input id="due-date" type="date" required />
+        </div>
+
+        <div class="form-group">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn btn-primary" id="issue-btn">Issue Invoice</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Outstanding Bills Table -->
+  <div class="card" style="margin-bottom: 28px;">
+    <h2>Outstanding Student Bills</h2>
+    <p class="subtitle">Invoices waiting to be settled. Record student cash/online payments here.</p>
+    <div id="unpaid-table-area">
+      <div class="empty-state">
+        <div class="empty-state-icon">⏳</div>
+        <p>Loading outstanding bills...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Paid Fees Ledger -->
+  <div class="card">
+    <h2>Fee Collection Archives</h2>
+    <p class="subtitle">Log history of all completed and recorded student fee payments.</p>
+    <div id="paid-table-area">
+      <div class="empty-state">
+        <div class="empty-state-icon">⏳</div>
+        <p>Loading payment history...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = "http://localhost:3000";
+  let feeBills = [];
+
+  // Auth guard
+  const userData = localStorage.getItem("hostel_user");
+  if (!userData) {
+    window.location.href = "login.html";
+  } else {
+    const user = JSON.parse(userData);
+    if (user.role !== "admin") {
+      window.location.href = "student-dashboard.html";
+    }
+    document.getElementById("user-name").textContent = user.username;
+    document.getElementById("user-avatar").textContent = user.username.charAt(0).toUpperCase();
+  }
+
+  function logout() {
+    localStorage.removeItem("hostel_user");
+    window.location.href = "login.html";
+  }
+
+  // Toggle Single Student select group
+  function toggleTargetStudent() {
+    const target = document.getElementById("billing-target").value;
+    const selectGroup = document.getElementById("student-select-group");
+    const studentSelect = document.getElementById("student-select");
+
+    if (target === "single") {
+      selectGroup.style.display = "block";
+      studentSelect.required = true;
+    } else {
+      selectGroup.style.display = "none";
+      studentSelect.required = false;
+      studentSelect.value = "";
+    }
+  }
+
+  // Load students dropdown
+  async function loadStudentsDropdown() {
+    try {
+      const res = await fetch(API + "/students");
+      const data = await res.json();
+      const select = document.getElementById("student-select");
+
+      select.innerHTML = '<option value="">-- Select Student --</option>';
+
+      if (data.success && data.data.length > 0) {
+        data.data.forEach((s) => {
+          const option = document.createElement("option");
+          option.value = s.id;
+          option.textContent = `${s.name} (Room ${s.room_no})`;
+          select.appendChild(option);
+        });
+      }
+    } catch (err) {
+      console.error("Error loading students dropdown:", err);
+    }
+  }
+
+  // Load Bills
+  async function loadBills() {
+    try {
+      const res = await fetch(API + "/fees");
+      const data = await res.json();
+
+      if (data.success) {
+        feeBills = data.data;
+        calculateStats();
+        renderLedgers();
+      } else {
+        showToast("Error fetching fee register", "error");
+      }
+    } catch (err) {
+      document.getElementById("unpaid-table-area").innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">⚠️</div>
+          <p>Cannot connect to server. Is it running?</p>
+        </div>`;
+    }
+  }
+
+  // Calculate statistics
+  function calculateStats() {
+    let totalBilled = 0;
+    let totalCollected = 0;
+    let totalOutstanding = 0;
+    let unpaidCount = 0;
+
+    feeBills.forEach(b => {
+      const amt = Number(b.amount);
+      totalBilled += amt;
+      if (b.status === "Paid") {
+        totalCollected += amt;
+      } else {
+        totalOutstanding += amt;
+        unpaidCount++;
+      }
+    });
+
+    document.getElementById("stat-billed-amount").textContent = `₹${totalBilled.toLocaleString("en-IN")}`;
+    document.getElementById("stat-collected-amount").textContent = `₹${totalCollected.toLocaleString("en-IN")}`;
+    document.getElementById("stat-outstanding-amount").textContent = `₹${totalOutstanding.toLocaleString("en-IN")}`;
+    document.getElementById("stat-unpaid-count").textContent = unpaidCount;
+  }
+
+  // Render ledgers
+  function renderLedgers() {
+    const unpaid = feeBills.filter(b => b.status === "Unpaid");
+    const paid = feeBills.filter(b => b.status === "Paid");
+
+    // Render Unpaid
+    const unpaidArea = document.getElementById("unpaid-table-area");
+    if (unpaid.length === 0) {
+      unpaidArea.innerHTML = `
+        <div class="empty-state" style="padding: 24px;">
+          <div class="empty-state-icon">🎉</div>
+          <p>All students have settled their outstanding balances!</p>
+        </div>`;
+    } else {
+      let unHtml = `<div class="table-wrapper"><table>
+        <thead><tr>
+          <th>Student Name</th><th>Room</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Actions</th>
+        </tr></thead><tbody>`;
+      
+      unpaid.forEach(b => {
+        const dateStr = new Date(b.due_date).toLocaleDateString("en-IN", {
+          year: "numeric", month: "short", day: "numeric"
+        });
+
+        unHtml += `<tr>
+          <td><strong>${escapeHTML(b.student_name)}</strong></td>
+          <td><span class="badge-outline badge-outline-warning">${escapeHTML(String(b.room_no))}</span></td>
+          <td><strong style="color:var(--danger);">₹${Number(b.amount).toLocaleString("en-IN")}</strong></td>
+          <td>📅 ${dateStr}</td>
+          <td><span class="badge badge-absent">${b.status}</span></td>
+          <td>
+            <button class="btn btn-outline" onclick="recordPayment(${b.id})" style="padding:6px 12px; font-size:0.8rem; width:auto; border-color:var(--success); color:var(--success);">Record Payment</button>
+          </td>
+        </tr>`;
+      });
+      unHtml += "</tbody></table></div>";
+      unpaidArea.innerHTML = unHtml;
+    }
+
+    // Render Paid
+    const paidArea = document.getElementById("paid-table-area");
+    if (paid.length === 0) {
+      paidArea.innerHTML = `
+        <div class="empty-state" style="padding: 24px;">
+          <div class="empty-state-icon">📭</div>
+          <p>No completed transaction archives found.</p>
+        </div>`;
+    } else {
+      let pdHtml = `<div class="table-wrapper"><table>
+        <thead><tr>
+          <th>Student Name</th><th>Room</th><th>Amount Collected</th><th>Due Date</th><th>Status</th>
+        </tr></thead><tbody>`;
+      
+      paid.forEach(b => {
+        const dateStr = new Date(b.due_date).toLocaleDateString("en-IN", {
+          year: "numeric", month: "short", day: "numeric"
+        });
+
+        pdHtml += `<tr>
+          <td><strong>${escapeHTML(b.student_name)}</strong></td>
+          <td><span class="badge-outline">${escapeHTML(String(b.room_no))}</span></td>
+          <td><strong style="color:var(--success);">₹${Number(b.amount).toLocaleString("en-IN")}</strong></td>
+          <td>📅 ${dateStr}</td>
+          <td><span class="badge badge-present">Completed</span></td>
+        </tr>`;
+      });
+      pdHtml += "</tbody></table></div>";
+      paidArea.innerHTML = pdHtml;
+    }
+  }
+
+  // Issue Invoice
+  async function issueInvoice(e) {
+    e.preventDefault();
+    const btn = document.getElementById("issue-btn");
+    const target = document.getElementById("billing-target").value;
+    const student_id = document.getElementById("student-select").value;
+    const amount = document.getElementById("amount").value;
+    const due_date = document.getElementById("due-date").value;
+
+    if (target === "single" && !student_id) {
+      showToast("Please select a student to bill", "error");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      const res = await fetch(API + "/fees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target,
+          student_id: target === "single" ? Number(student_id) : null,
+          amount: Number(amount),
+          due_date
+        })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Invoice bill issued successfully!", "success");
+        document.getElementById("billing-form").reset();
+        toggleTargetStudent();
+        loadBills();
+      } else {
+        showToast(data.message || "Error issuing invoice", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Issue Invoice";
+    }
+  }
+
+  // Record Payment
+  async function recordPayment(id) {
+    if (!confirm("Are you sure you want to record payment for this bill?")) return;
+
+    try {
+      const res = await fetch(API + `/fees/${id}/pay`, { method: "PUT" });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast("Payment recorded successfully!", "success");
+        loadBills();
+      } else {
+        showToast(data.message || "Recording failed", "error");
+      }
+    } catch (err) {
+      showToast("Cannot connect to server", "error");
+    }
+  }
+
+  // Helpers
+  function escapeHTML(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function showToast(message, type) {
+    const existing = document.querySelector(".toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "toast toast-" + type;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  // Initialize
+  loadStudentsDropdown();
+  loadBills();
+</script>
+</body>
+</html>

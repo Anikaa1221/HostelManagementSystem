@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Hostel Management System — Admin Dashboard" />
+  <title>Dashboard — Hostel Management</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="navbar-brand">🏠 Hostel Manager</div>
+  <div class="navbar-links">
+    <a href="dashboard.html" class="active">Dashboard</a>
+    <a href="students.html">Students</a>
+    <a href="attendance.html">Attendance</a>
+    <a href="rooms.html">Rooms</a>
+    <a href="complaints.html">Complaints</a>
+    <a href="visitors.html">Visitors</a>
+    <a href="fees.html">Fees</a>
+  </div>
+  <div class="user-badge">
+    <div class="user-avatar" id="user-avatar">A</div>
+    <span id="user-name">Admin</span>
+    <button class="btn btn-ghost" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<!-- Content -->
+<div class="container">
+  <div class="section-header">
+    <div>
+      <h1>Dashboard</h1>
+      <p class="subtitle" id="welcome-text">Welcome back 👋</p>
+    </div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <h3>Total Students</h3>
+      <div class="value" id="stat-students">-</div>
+      <div class="stat-desc">Registered profiles</div>
+    </div>
+    <div class="stat-card">
+      <h3>Room Occupancy</h3>
+      <div class="value" id="stat-occupancy">-</div>
+      <div class="stat-desc" id="stat-rooms-count">Loading rooms...</div>
+    </div>
+    <div class="stat-card">
+      <h3>Pending Complaints</h3>
+      <div class="value" id="stat-complaints">-</div>
+      <div class="stat-desc">Warden review needed</div>
+    </div>
+    <div class="stat-card">
+      <h3>Active Visitors</h3>
+      <div class="value" id="stat-visitors">-</div>
+      <div class="stat-desc">Currently in hostel</div>
+    </div>
+    <div class="stat-card">
+      <h3>Pending Fees</h3>
+      <div class="value" id="stat-fees">-</div>
+      <div class="stat-desc">Bills yet to be paid</div>
+    </div>
+  </div>
+
+  <!-- Modules Grid -->
+  <div class="dashboard-grid">
+    <a href="students.html" class="dash-card">
+      <div class="dash-card-icon">🎓</div>
+      <h3>Student Monitoring</h3>
+      <p>Add, edit, view, and pre-register student profiles</p>
+    </a>
+
+    <a href="attendance.html" class="dash-card">
+      <div class="dash-card-icon">📋</div>
+      <h3>Smart Attendance</h3>
+      <p>Generate Warden PIN and view monthly report ledger</p>
+    </a>
+
+    <a href="rooms.html" class="dash-card">
+      <div class="dash-card-icon">🔑</div>
+      <h3>Room Allocation</h3>
+      <p>Configure rooms, assign beds, and check roommates</p>
+    </a>
+
+    <a href="complaints.html" class="dash-card">
+      <div class="dash-card-icon">🚨</div>
+      <h3>Review Complaints</h3>
+      <p>Track student complaints and update status to resolved</p>
+    </a>
+
+    <a href="visitors.html" class="dash-card">
+      <div class="dash-card-icon">👣</div>
+      <h3>Track Visitors</h3>
+      <p>Log incoming visitors and record checkout times</p>
+    </a>
+
+    <a href="fees.html" class="dash-card">
+      <div class="dash-card-icon">💰</div>
+      <h3>Fee Management</h3>
+      <p>Issue fee invoices and keep track of payments</p>
+    </a>
+  </div>
+</div>
+
+<script>
+  const API = "http://localhost:3000";
+
+  // Auth guard
+  const userData = localStorage.getItem("hostel_user");
+  if (!userData) {
+    window.location.href = "login.html";
+  } else {
+    const user = JSON.parse(userData);
+    if (user.role !== "admin") {
+      window.location.href = "student-dashboard.html";
+    }
+    document.getElementById("user-name").textContent = user.username;
+    document.getElementById("user-avatar").textContent = user.username.charAt(0).toUpperCase();
+    document.getElementById("welcome-text").textContent = `Welcome back, Warden ${user.username} 👋`;
+  }
+
+  function logout() {
+    localStorage.removeItem("hostel_user");
+    window.location.href = "login.html";
+  }
+
+  // Load metrics from API
+  async function loadMetrics() {
+    try {
+      // 1. Students Count
+      const resStuds = await fetch(API + "/students");
+      const studs = await resStuds.json();
+      const totalStudents = studs.success ? studs.data.length : 0;
+      document.getElementById("stat-students").textContent = totalStudents;
+
+      // 2. Rooms Occupancy
+      const resRooms = await fetch(API + "/rooms");
+      const rooms = await resRooms.json();
+      let totalBeds = 0;
+      let occupiedBeds = 0;
+      let totalRoomsCount = 0;
+      if (rooms.success) {
+        totalRoomsCount = rooms.data.length;
+        rooms.data.forEach(r => {
+          totalBeds += r.capacity;
+          occupiedBeds += r.occupant_count;
+        });
+      }
+      document.getElementById("stat-occupancy").textContent = `${occupiedBeds}/${totalBeds}`;
+      document.getElementById("stat-rooms-count").textContent = `${totalRoomsCount} rooms total`;
+
+      // 3. Pending Complaints
+      const resComplaints = await fetch(API + "/complaints");
+      const complaints = await resComplaints.json();
+      const pendingCount = complaints.success
+        ? complaints.data.filter(c => c.status === "Pending").length
+        : 0;
+      document.getElementById("stat-complaints").textContent = pendingCount;
+
+      // 4. Active Visitors
+      const resVisitors = await fetch(API + "/visitors");
+      const visitors = await resVisitors.json();
+      const activeVisCount = visitors.success
+        ? visitors.data.filter(v => v.exit_time === null).length
+        : 0;
+      document.getElementById("stat-visitors").textContent = activeVisCount;
+
+      // 5. Unpaid Fees
+      const resFees = await fetch(API + "/fees");
+      const fees = await resFees.json();
+      const unpaidCount = fees.success
+        ? fees.data.filter(f => f.status === "Unpaid").length
+        : 0;
+      document.getElementById("stat-fees").textContent = unpaidCount;
+    } catch (err) {
+      console.error("Error fetching dashboard statistics metrics:", err);
+    }
+  }
+
+  loadMetrics();
+</script>
+
+</body>
+</html>
