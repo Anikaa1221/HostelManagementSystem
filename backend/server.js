@@ -2,6 +2,8 @@ const express = require("express");
 const mysql = require("mysql2/promise");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
+const fs = require("fs");
+
 require("dotenv").config();
 
 const app = express();
@@ -26,124 +28,18 @@ async function initializeDatabase() {
   let conn;
   try {
     conn = await db.getConnection();
-    console.log("✅ MySQL Connected. Verifying and creating schema...");
+    console.log("✅ MySQL Connected. Reading and executing schema from hostel_db.sql...");
 
-    // 1. Create rooms table
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS rooms (
-        room_no VARCHAR(10) PRIMARY KEY,
-        capacity INT NOT NULL,
-        type VARCHAR(20) NOT NULL,
-        status VARCHAR(20) DEFAULT 'Available'
-      )
-    `);
+    const sqlContent = fs.readFileSync("./hostel_db.sql", "utf8");
+    const statements = sqlContent.split(";").map(stmt => stmt.trim()).filter(Boolean);
 
-    // 2. Add columns to students table if they don't exist
-    const [studentCols] = await conn.query("SHOW COLUMNS FROM students");
-    const studentFields = studentCols.map(c => c.Field);
-    if (!studentFields.includes("ph_no")) {
-      await conn.query("ALTER TABLE students ADD COLUMN ph_no VARCHAR(20)");
-    }
-    if (!studentFields.includes("dept")) {
-      await conn.query("ALTER TABLE students ADD COLUMN dept VARCHAR(50)");
+    for (const stmt of statements) {
+      await conn.query(stmt);
     }
 
-    // 3. Add columns to users table if they don't exist
-    const [userCols] = await conn.query("SHOW COLUMNS FROM users");
-    const userFields = userCols.map(c => c.Field);
-    if (!userFields.includes("role")) {
-      await conn.query("ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'student'");
-    }
-    if (!userFields.includes("student_id")) {
-      await conn.query("ALTER TABLE users ADD COLUMN student_id INT UNIQUE");
-      try {
-        await conn.query(`
-          ALTER TABLE users 
-          ADD CONSTRAINT fk_user_student 
-          FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE SET NULL
-        `);
-      } catch (fkErr) {
-        // FK already exists or table setup issue
-      }
-    }
-
-    // 4. Update attendance table to add method/geofenced columns
-    const [attendanceCols] = await conn.query("SHOW COLUMNS FROM attendance");
-    const attendanceFields = attendanceCols.map(c => c.Field);
-    if (!attendanceFields.includes("method")) {
-      await conn.query("ALTER TABLE attendance ADD COLUMN method VARCHAR(20) DEFAULT 'Manual'");
-    }
-    if (!attendanceFields.includes("geofenced")) {
-      await conn.query("ALTER TABLE attendance ADD COLUMN geofenced BOOLEAN DEFAULT FALSE");
-    }
-
-    // 5. Create complaints table
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS complaints (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        student_id INT NOT NULL,
-        description TEXT NOT NULL,
-        date DATE NOT NULL,
-        status VARCHAR(20) DEFAULT 'Pending',
-        FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
-      )
-    `);
-
-    // 6. Create visitors table
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS visitors (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        relation VARCHAR(50) NOT NULL,
-        student_id INT NOT NULL,
-        entry_time DATETIME NOT NULL,
-        exit_time DATETIME,
-        FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
-      )
-    `);
-
-    // 7. Create fees table
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS fees (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        student_id INT NOT NULL,
-        amount DECIMAL(10,2) NOT NULL,
-        due_date DATE NOT NULL,
-        status VARCHAR(20) DEFAULT 'Unpaid',
-        FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
-      )
-    `);
-
-    // 8. Create leaves table
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS leaves (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        student_id INT NOT NULL,
-        reason TEXT NOT NULL,
-        from_date DATE NOT NULL,
-        to_date DATE NOT NULL,
-        status VARCHAR(20) DEFAULT 'Pending',
-        FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
-      )
-    `);
-
-    // 9. Seed default rooms if empty
-    const [roomRows] = await conn.query("SELECT COUNT(*) as count FROM rooms");
-    if (roomRows[0].count === 0) {
-      await conn.query(`
-        INSERT INTO rooms (room_no, capacity, type, status) VALUES
-        ('101', 2, 'AC', 'Available'),
-        ('102', 2, 'AC', 'Available'),
-        ('103', 4, 'Non-AC', 'Available'),
-        ('201', 1, 'AC', 'Available'),
-        ('202', 2, 'Non-AC', 'Available')
-      `);
-      console.log("🌱 Default rooms seeded");
-    }
-
-    console.log("✅ Database schema verified and initialized");
+    console.log("✅ Database schema verified and initialized from SQL file");
   } catch (err) {
-    console.log("❌ DB Initialization Error:", err.message);
+    console.log("❌ DB Schema Initialization Error:", err.message);
   } finally {
     if (conn) conn.release();
   }
