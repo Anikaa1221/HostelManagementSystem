@@ -68,8 +68,10 @@
       const user = JSON.parse(userData);
       if (user.role === "admin") {
         window.location.href = "dashboard.html";
-      } else {
+      } else if (user.role === "student") {
         window.location.href = "student-dashboard.html";
+      } else {
+        localStorage.removeItem("hostel_user");
       }
     }
 

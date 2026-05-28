@@ -3,6 +3,7 @@ const mysql = require("mysql2/promise");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const fs = require("fs");
+const path = require("path");
 
 require("dotenv").config();
 
@@ -30,7 +31,7 @@ async function initializeDatabase() {
     conn = await db.getConnection();
     console.log("✅ MySQL Connected. Reading and executing schema from hostel_db.sql...");
 
-    const sqlContent = fs.readFileSync("./hostel_db.sql", "utf8");
+    const sqlContent = fs.readFileSync(path.join(__dirname, "hostel_db.sql"), "utf8");
     const statements = sqlContent.split(";").map(stmt => stmt.trim()).filter(Boolean);
 
     for (const stmt of statements) {

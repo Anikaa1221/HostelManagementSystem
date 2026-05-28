@@ -1,0 +1,118 @@
+# Hostel Management System — Project Summary & Feature Guide
+
+This Hostel Management System is a full-stack web application designed to automate, streamline, and digitize the daily operations of a student hostel. It provides dual-role portals (Warden/Admin and Student) to manage accommodations, track attendance with location-based verification, process fee billing, manage outpasses, log visitors, and resolve complaints.
+
+---
+
+## ⚙️ Architecture & Technical Stack
+
+The system is built as a split-architecture full-stack application:
+
+```mermaid
+graph TD
+    subgraph Frontend [Client Browser - Vanilla Web]
+        UI[HTML5 / CSS3 / Vanilla JS]
+        LS[(Local Storage Session)]
+    end
+    
+    subgraph Backend [Express API Server]
+        API[Node.js + Express.js]
+        PIN[30s Rotating PIN Generator]
+        GEO[Geofencing & Time-Window Evaluators]
+    end
+    
+    subgraph Database [Relational Storage]
+        DB[(MySQL Database)]
+    end
+
+    UI -->|REST API Requests| API
+    API -->|Queries / Transactions| DB
+    UI <-->|Local Auth State Checks| LS
+```
+
+1. **Frontend**: Pure HTML5, modern CSS3 styling (harmonic color palettes, glassmorphism UI elements, micro-animations, fully responsive), and Vanilla JavaScript for asynchronous API calls (`fetch`), DOM rendering, and client-side routing guards.
+2. **Backend**: Node.js with Express.js creating a RESTful API server.
+3. **Database**: MySQL relational database holding normalized tables with structured foreign key constraints.
+4. **Security**: Multi-tier authentication including client-side navigation guards and secure server-side password hashing using **bcryptjs**.
+
+---
+
+## 🗄️ Database Schema & Data Model
+
+The database (`hostel_db`) consists of **8 interconnected tables** mapped out below:
+
+* **`rooms`**: Stores room configurations (`room_no`, `capacity`, `type` [AC/Non-AC], `status` [Available/Full]).
+* **`students`**: Student profiles containing core data (`id`, `name`, `email`, `ph_no`, `dept`) and allocated room reference (`room_no`).
+* **`users`**: Login credentials (`username`, `password` [hashed], `role` [admin/student], and a 1-to-1 `student_id` linking to the student profile).
+* **`attendance`**: Daily log (`student_id`, `date`, `status` [Present/Absent], `method` [Manual/Smart Phone], `geofenced` status).
+* **`complaints`**: Student-filed issues (`student_id`, `description`, `date`, `status` [Pending/Resolved]).
+* **`fees`**: Billing records (`student_id`, `amount`, `due_date`, `status` [Unpaid/Paid]).
+* **`leaves`**: Student outpass logs (`student_id`, `reason`, `from_date`, `to_date`, `status` [Pending/Approved/Rejected]).
+* **`visitors`**: Visitor records (`name`, `relation`, `student_id` being visited, `entry_time`, `exit_time`).
+
+---
+
+## 🚀 Core Features & Efficient Usage Guide
+
+### 1. Unified Authentication System
+* **How it works**: A dual-tab Login/Signup interface ([login.html](file:///c:/Users/anika/OneDrive/Desktop/HostelManagementSystem/frontend/login.html)). 
+* **Student Sign-Up Validation**: For security, a student cannot register unless their email is **pre-registered** by the Warden in the `students` list. This prevents random guest registrations from accessing student portals.
+* **Pro Tip for Presentation**: Emphasize the route guard system. If someone manually tries to change the URL to access pages above their clearance (e.g., student trying to access Warden's `rooms.html`), they are automatically kicked out.
+
+---
+
+### 2. Smart Attendance Check-In (Warden & Student)
+This is the most technically complex feature of the project, replacing manual rolls with a digital checkpoint:
+
+* **Warden View ([attendance.html](file:///c:/Users/anika/OneDrive/Desktop/HostelManagementSystem/frontend/attendance.html))**:
+  * Displays a **monthly attendance spreadsheet matrix** dynamically.
+  * Allows Warden to manually mark/override any student's status for the day.
+  * Displays a **live rotating 6-digit PIN** that expires every 30 seconds.
+* **Student View ([student-dashboard.html](file:///c:/Users/anika/OneDrive/Desktop/HostelManagementSystem/frontend/student-dashboard.html))**:
+  * Students check in by entering the live 6-digit PIN shown on the Warden's desk screen.
+  * **Geofence Check**: Uses the browser's Geolocation API. The backend calculates the distance between the student's coordinates and the hostel location (using the Haversine formula) and rejects check-ins if the student is more than 100 meters away.
+  * **Time-Window Check**: Restricts check-ins to official hours (7:30 PM - 9:00 PM local time).
+* **Efficient Usage**: 
+  * Project the Warden's attendance dashboard onto a screen in the lobby during roll call.
+  * Students open their dashboards on their smartphones, type in the current PIN, share their location, and sign in.
+
+---
+
+### 3. Interactive Room Allocation
+* **How it works ([rooms.html](file:///c:/Users/anika/OneDrive/Desktop/HostelManagementSystem/frontend/rooms.html))**:
+  * Wardens create/remove rooms and assign students to rooms.
+  * The system dynamically tracks occupancy. If a room has 2 beds and 2 students are assigned, it automatically marks the room's status as `Full`. If a student is removed, it automatically shifts back to `Available`.
+* **Efficient Usage**: Keep student room allocations up-to-date. When a new student arrives, add them under the **Students** tab, then use the **Allocate Room** modal under the **Rooms** tab to instantly place them in an available room.
+
+---
+
+### 4. Digital Leaves & Outpasses
+* **Student Side**: Submits leave requests with a reason and date range.
+* **Warden Side ([complaints.html](file:///c:/Users/anika/OneDrive/Desktop/HostelManagementSystem/frontend/complaints.html) - Leaves tab)**:
+  * Wardens approve or reject outpasses with a single click.
+  * Once approved, the status is instantly updated on the student's dashboard.
+* **Efficient Usage**: Students should submit outpass requests at least 24 hours prior. Wardens can filter by "Pending" status to quickly clear pending applications in the morning.
+
+---
+
+### 5. Automated & Bulk Fee Billing
+* **How it works ([fees.html](file:///c:/Users/anika/OneDrive/Desktop/HostelManagementSystem/frontend/fees.html))**:
+  * Allows Wardens to issue bills in bulk (e.g., monthly mess fees to *all* students) or target single students individually (e.g., custom fine/repair bill).
+  * Students see their due bills instantly and can record payments.
+* **Efficient Usage**: At the start of each month, Warden selects **Target: All Students**, inputs the monthly fee (e.g., `5000`), sets the due date, and submits. This instantly generates invoices for all students in one click.
+
+---
+
+### 6. Visitor Logs & Complaints Portal
+* **Visitor Tracking ([visitors.html](file:///c:/Users/anika/OneDrive/Desktop/HostelManagementSystem/frontend/visitors.html))**: Wardens log visitor details at the gate. When the visitor leaves, a single click on "Log Out" records the exact exit timestamp.
+* **Complaints**: Students submit issues (e.g., "Fan not working"). Wardens mark them as "Resolved" when fixed, providing full transparency.
+
+---
+
+## 🎓 Tips for Explaining the Project to Teachers
+
+When presenting this project to your evaluators, highlight the following **differentiators** to get high marks:
+
+1. **Transactional Integrity & Automatic Status Updates**: Mention that when a student is deleted or room allocation changes, the database and backend automatically clean up references and recalculate room capacities without warden intervention.
+2. **Three-Way Smart Attendance Verification**: Highlight that the attendance check-in is not just a button. It validates **something you see** (the rotating 30s PIN), **somewhere you are** (geofenced 100m location check), and **sometime you check-in** (7:30 PM - 9:00 PM check).
+3. **Preparedness/Robustness**: Talk about how backend code is written using path-safe operations (`path.join`) and schema checks (`CREATE TABLE IF NOT EXISTS`, `INSERT IGNORE`) to prevent server crashes on repeated startups, keeping the project stable and production-ready.
