@@ -13,26 +13,65 @@ app.use(cors());
 app.use(express.json());
 
 /* =======================
-   MYSQL CONNECTION POOL
+   MYSQL CONNECTION SETUP
 ======================= */
-const db = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
+const {
+  DB_HOST,
+  DB_USER,
+  DB_PASS,
+  DB_NAME,
+} = process.env;
+
+if (!DB_HOST || !DB_USER || !DB_NAME) {
+  console.error("❌ Missing required DB environment variables. Please set DB_HOST, DB_USER, and DB_NAME.");
+  process.exit(1);
+}
+
+const baseDbConfig = {
+  host: DB_HOST,
+  user: DB_USER,
+  password: DB_PASS,
   waitForConnections: true,
   connectionLimit: 10,
-});
+};
 
-// Database Schema Initialization & Connection Verification
+let db;
+
+async function ensureDatabaseExists() {
+  const tempPool = mysql.createPool(baseDbConfig);
+  let conn;
+
+  try {
+    conn = await tempPool.getConnection();
+    await conn.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\``);
+    console.log(`✅ Database "${DB_NAME}" exists or was created successfully.`);
+  } catch (err) {
+    console.error("❌ Database creation/check failed:", err.message);
+    process.exit(1);
+  } finally {
+    if (conn) conn.release();
+    await tempPool.end();
+  }
+}
+
 async function initializeDatabase() {
+  await ensureDatabaseExists();
+
+  db = mysql.createPool({
+    ...baseDbConfig,
+    database: DB_NAME,
+  });
+
   let conn;
   try {
     conn = await db.getConnection();
     console.log("✅ MySQL Connected. Reading and executing schema from hostel_db.sql...");
 
     const sqlContent = fs.readFileSync(path.join(__dirname, "hostel_db.sql"), "utf8");
-    const statements = sqlContent.split(";").map(stmt => stmt.trim()).filter(Boolean);
+    const statements = sqlContent
+      .split(";")
+      .map(stmt => stmt.trim())
+      .filter(Boolean);
 
     for (const stmt of statements) {
       await conn.query(stmt);

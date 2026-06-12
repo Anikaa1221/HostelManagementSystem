@@ -90,7 +90,7 @@
         <div class="form-group">
           <label for="sim-location">Simulate Location</label>
           <select id="sim-location" onchange="updateSimCoords()">
-            <option value="hostel">At Hostel (Bangalore, 12.9716, 77.5946)</option>
+            <option value="hostel">At Hostel (St Joseph Engineering College Vamanjoor Mangalore, 12.9716, 77.5946)</option>
             <option value="away">Away from Hostel (Chennai, 13.0827, 80.2707)</option>
             <option value="denied">Blocked / Denied Location Access</option>
           </select>
@@ -269,7 +269,7 @@
       simulatedDenied = false;
       coordsDiv.textContent = `Lat: ${simulatedLat}, Lng: ${simulatedLng}`;
       statusBox.className = "geo-indicator success";
-      statusText.textContent = "Location ready: Simulated inside Hostel boundary ( बैंगलोर)";
+      statusText.textContent = "Location ready: Simulated inside Hostel boundary (St Joseph Engineering College Vamanjoor Mangalore)";
     } else if (locVal === "away") {
       simulatedLat = 13.0827;
       simulatedLng = 80.2707;
