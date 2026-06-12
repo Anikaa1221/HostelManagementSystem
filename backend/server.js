@@ -120,26 +120,7 @@ async function initializeDatabase() {
 // Run DB Initializer
 initializeDatabase();
 
-// Dynamic PIN store for smart attendance check-in (rotates every 30s)
-let activeAttendancePIN = {
-  code: "000000",
-  generatedAt: 0,
-  expiresInSeconds: 30
-};
-
-function rotatePIN() {
-  const pin = Math.floor(100000 + Math.random() * 900000).toString();
-  activeAttendancePIN = {
-    code: pin,
-    generatedAt: Date.now(),
-    expiresInSeconds: 30
-  };
-  return activeAttendancePIN;
-}
-
-// Rotate immediately and schedule interval
-rotatePIN();
-setInterval(rotatePIN, 30000);
+// Removed PIN rotation logic
 
 /* =======================
    HELPER: Validate fields
@@ -152,6 +133,25 @@ function validateFields(fields, res) {
     }
   }
   return true;
+}
+
+/* =======================
+   HELPER: Send SMS (Simulated)
+======================= */
+async function sendParentSms(phone, message) {
+  if (!phone) {
+    console.log("⚠️ SMS Simulation Skipped: No parent phone number provided for student.");
+    return;
+  }
+  
+  console.log("\n" + "=".repeat(50));
+  console.log(`📱 SIMULATED SMS OUTBOUND`);
+  console.log(`TO: ${phone}`);
+  console.log(`MESSAGE: "${message}"`);
+  console.log("=".repeat(50) + "\n");
+  
+  // Note: To send real SMS, integrate Twilio or Fast2SMS API here.
+  return Promise.resolve();
 }
 
 /* =======================
@@ -284,12 +284,12 @@ app.post("/login", async (req, res) => {
 ======================= */
 app.post("/students", async (req, res) => {
   try {
-    const { name, email, room_no, ph_no, dept } = req.body;
+    const { name, email, room_no, ph_no, parent_phone, dept } = req.body;
     if (!validateFields({ name, email, room_no }, res)) return;
 
     const [result] = await db.query(
-      "INSERT INTO students (name, email, room_no, ph_no, dept) VALUES (?, ?, ?, ?, ?)",
-      [name.trim(), email.trim(), room_no, ph_no ? ph_no.trim() : null, dept ? dept.trim() : null]
+      "INSERT INTO students (name, email, room_no, ph_no, parent_phone, dept) VALUES (?, ?, ?, ?, ?, ?)",
+      [name.trim(), email.trim(), room_no, ph_no ? ph_no.trim() : null, parent_phone ? parent_phone.trim() : null, dept ? dept.trim() : null]
     );
 
     // If a room was specified, verify room capacity status
@@ -306,7 +306,7 @@ app.post("/students", async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Student added successfully",
-      student: { id: result.insertId, name, email, room_no, ph_no, dept },
+      student: { id: result.insertId, name, email, room_no, ph_no, parent_phone, dept },
     });
   } catch (err) {
     console.error("Add Student Error:", err.message);
@@ -346,7 +346,7 @@ app.get("/students/:id", async (req, res) => {
 app.put("/students/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, room_no, ph_no, dept } = req.body;
+    const { name, email, room_no, ph_no, parent_phone, dept } = req.body;
     if (!validateFields({ name, email, room_no }, res)) return;
 
     // Get previous room
@@ -354,8 +354,8 @@ app.put("/students/:id", async (req, res) => {
     const oldRoom = oldStudent.length > 0 ? oldStudent[0].room_no : null;
 
     const [result] = await db.query(
-      "UPDATE students SET name = ?, email = ?, room_no = ?, ph_no = ?, dept = ? WHERE id = ?",
-      [name.trim(), email.trim(), room_no, ph_no ? ph_no.trim() : null, dept ? dept.trim() : null, id]
+      "UPDATE students SET name = ?, email = ?, room_no = ?, ph_no = ?, parent_phone = ?, dept = ? WHERE id = ?",
+      [name.trim(), email.trim(), room_no, ph_no ? ph_no.trim() : null, parent_phone ? parent_phone.trim() : null, dept ? dept.trim() : null, id]
     );
 
     if (result.affectedRows === 0) {
@@ -896,29 +896,12 @@ app.get("/attendance/:student_id", async (req, res) => {
   }
 });
 
-/* =======================
-   SMART ATTENDANCE VERIFICATION
-======================= */
-app.get("/attendance/active-pin", (req, res) => {
-  const elapsed = Math.floor((Date.now() - activeAttendancePIN.generatedAt) / 1000);
-  const remaining = Math.max(0, 30 - elapsed);
-  
-  res.json({
-    success: true,
-    code: activeAttendancePIN.code,
-    secondsRemaining: remaining
-  });
-});
+
 
 app.post("/attendance/checkin", async (req, res) => {
   try {
-    const { student_id, pin, lat, lng, bypass_geofence, bypass_time } = req.body;
-    if (!validateFields({ student_id, pin }, res)) return;
-
-    // Validate PIN
-    if (String(pin).trim() !== activeAttendancePIN.code) {
-      return res.status(400).json({ success: false, message: "Invalid or expired check-in PIN" });
-    }
+    const { student_id, lat, lng, bypass_geofence, bypass_time } = req.body;
+    if (!validateFields({ student_id }, res)) return;
 
     // Time window constraint: 7:30 PM - 9:00 PM local time
     if (!bypass_time) {
