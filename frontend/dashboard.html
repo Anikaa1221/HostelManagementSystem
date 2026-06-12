@@ -55,6 +55,11 @@
       <div class="stat-desc">Warden review needed</div>
     </div>
     <div class="stat-card">
+      <h3>Pending Leaves</h3>
+      <div class="value" id="stat-leaves">-</div>
+      <div class="stat-desc">Leave approvals awaiting</div>
+    </div>
+    <div class="stat-card">
       <h3>Active Visitors</h3>
       <div class="value" id="stat-visitors">-</div>
       <div class="stat-desc">Currently in hostel</div>
@@ -90,6 +95,12 @@
       <div class="dash-card-icon">🚨</div>
       <h3>Review Complaints</h3>
       <p>Track student complaints and update status to resolved</p>
+    </a>
+
+    <a href="leaves.html" class="dash-card">
+      <div class="dash-card-icon">📝</div>
+      <h3>Review Leave Requests</h3>
+      <p>Authorize or reject student leave applications</p>
     </a>
 
     <a href="visitors.html" class="dash-card">
@@ -168,7 +179,15 @@
         : 0;
       document.getElementById("stat-complaints").textContent = pendingCount;
 
-      // 4. Active Visitors
+      // 4. Pending Leaves
+      const resLeaves = await fetch(API + "/leaves");
+      const leaves = await resLeaves.json();
+      const pendingLeaves = leaves.success
+        ? leaves.data.filter(l => l.status === "Pending").length
+        : 0;
+      document.getElementById("stat-leaves").textContent = pendingLeaves;
+
+      // 5. Active Visitors
       const resVisitors = await fetch(API + "/visitors");
       const visitors = await resVisitors.json();
       const activeVisCount = visitors.success
