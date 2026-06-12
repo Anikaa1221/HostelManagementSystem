@@ -51,6 +51,13 @@
             pre-registered by the Warden.</small>
         </div>
 
+        <div id="parent-phone-group" class="form-group" style="display: none;">
+          <label for="parent-phone">Parent Phone Number</label>
+          <input id="parent-phone" type="tel" placeholder="e.g. 9876543210" />
+          <small class="subtitle" style="display: block; margin-top: 4px; font-size: 0.75rem;">Optional but recommended
+            for leave notifications.</small>
+        </div>
+
         <button type="submit" class="btn btn-primary" id="submit-btn">
           Login
         </button>
@@ -91,6 +98,7 @@
       } else {
         roleGroup.style.display = "none";
         document.getElementById("email-group").style.display = "none";
+        document.getElementById("parent-phone-group").style.display = "none";
       }
 
       document.getElementById("submit-btn").textContent = mode === "login" ? "Login" : "Sign Up";
@@ -99,12 +107,15 @@
     function toggleStudentEmailField() {
       const role = document.getElementById("role").value;
       const emailGroup = document.getElementById("email-group");
+      const parentPhoneGroup = document.getElementById("parent-phone-group");
       const emailInput = document.getElementById("email");
       if (mode === "signup" && role === "student") {
         emailGroup.style.display = "block";
+        parentPhoneGroup.style.display = "block";
         emailInput.required = true;
       } else {
         emailGroup.style.display = "none";
+        parentPhoneGroup.style.display = "none";
         emailInput.required = false;
       }
     }
@@ -116,6 +127,7 @@
       const password = document.getElementById("password").value;
       const role = document.getElementById("role") ? document.getElementById("role").value : "student";
       const email = document.getElementById("email") ? document.getElementById("email").value.trim() : "";
+      const parentPhone = document.getElementById("parent-phone") ? document.getElementById("parent-phone").value.trim() : "";
 
       if (!username || !password) {
         showToast("Please fill in all fields", "error");
@@ -137,6 +149,7 @@
           payload.role = role;
           if (role === "student") {
             payload.email = email;
+            payload.parent_phone = parentPhone;
           }
         }
 

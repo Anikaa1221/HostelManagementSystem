@@ -4,6 +4,7 @@ const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const fs = require("fs");
 const path = require("path");
+const twilio = require("twilio");
 
 require("dotenv").config();
 
@@ -20,11 +21,42 @@ const {
   DB_USER,
   DB_PASS,
   DB_NAME,
+  TWILIO_ACCOUNT_SID,
+  TWILIO_AUTH_TOKEN,
+  TWILIO_FROM_NUMBER,
 } = process.env;
 
 if (!DB_HOST || !DB_USER || !DB_NAME) {
   console.error("❌ Missing required DB environment variables. Please set DB_HOST, DB_USER, and DB_NAME.");
   process.exit(1);
+}
+
+const twilioEnabled = !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER);
+const twilioClient = twilioEnabled ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) : null;
+
+async function sendParentSms(phone, message) {
+  if (!phone) {
+    console.log("SMS skipped: missing parent phone number");
+    return;
+  }
+  if (!twilioEnabled) {
+    console.log("SMS skipped: Twilio not configured. Parent number:", phone, "message:", message);
+    return;
+  }
+
+  const normalizedPhone = phone.trim().replace(/[^\d+]/g, "");
+  const toPhone = normalizedPhone.startsWith("+") ? normalizedPhone : `+91${normalizedPhone}`;
+
+  try {
+    await twilioClient.messages.create({
+      body: message,
+      from: TWILIO_FROM_NUMBER,
+      to: toPhone,
+    });
+    console.log(`✅ Leave SMS sent to ${toPhone}`);
+  } catch (err) {
+    console.error("❌ SMS send error:", err.message || err);
+  }
 }
 
 const baseDbConfig = {
@@ -134,7 +166,7 @@ app.get("/", (req, res) => {
 ======================= */
 app.post("/signup", async (req, res) => {
   try {
-    const { username, password, role, email } = req.body;
+    const { username, password, role, email, parent_phone } = req.body;
     if (!validateFields({ username, password }, res)) return;
 
     const userRole = role || "student";
@@ -188,6 +220,13 @@ app.post("/signup", async (req, res) => {
     // Hash password before storing
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
+
+    if (linkedStudentId && parent_phone) {
+      await db.query(
+        "UPDATE students SET parent_phone = ? WHERE id = ?",
+        [parent_phone.trim(), linkedStudentId]
+      );
+    }
 
     const [result] = await db.query(
       "INSERT INTO users (username, password, role, student_id) VALUES (?, ?, ?, ?)",
@@ -735,10 +774,23 @@ app.post("/leaves", async (req, res) => {
     const { student_id, reason, from_date, to_date } = req.body;
     if (!validateFields({ student_id, reason, from_date, to_date }, res)) return;
 
+    const [studentRows] = await db.query(
+      "SELECT name, parent_phone FROM students WHERE id = ?",
+      [student_id]
+    );
+
+    if (studentRows.length === 0) {
+      return res.status(404).json({ success: false, message: "Student not found" });
+    }
+
+    const student = studentRows[0];
     await db.query(
       "INSERT INTO leaves (student_id, reason, from_date, to_date, status) VALUES (?, ?, ?, ?, 'Pending')",
       [student_id, reason.trim(), from_date, to_date]
     );
+
+    const message = `Dear parent, ${student.name} has applied for leave from ${from_date} to ${to_date}. Please contact the hostel warden for more details.`;
+    await sendParentSms(student.parent_phone, message);
 
     res.status(201).json({ success: true, message: "Leave application submitted" });
   } catch (err) {
