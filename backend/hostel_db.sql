@@ -24,8 +24,9 @@ CREATE TABLE IF NOT EXISTS `students` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-INSERT IGNORE INTO `students` (`id`, `name`, `email`, `room_no`, `ph_no`, `dept`) VALUES
-(1, 'Anika Sharma', 'anika@email.com', '101', '9876543210', 'CSE');
+-- parent_phone now included in the seed row
+INSERT IGNORE INTO `students` (`id`, `name`, `email`, `room_no`, `ph_no`, `parent_phone`, `dept`) VALUES
+(1, 'Anika Sharma', 'anika@email.com', '101', '9876543210', '9876500000', 'CSE');
 
 CREATE TABLE IF NOT EXISTS `attendance` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -83,8 +84,6 @@ INSERT IGNORE INTO `users` (`id`, `username`, `password`, `role`, `student_id`) 
 (1, 'anika12', '$2a$10$svhqtR.L6UCE7TFokmsvxO5638iUA0GMcbxHTEy8psgwijQG0hbLC', 'student', 1),
 (2, 'warden1', '$2a$10$cSEORAkvYNWR0Hi9xXrl1uX10DJRMG2u95Xz1WWpWc433PaybRCye', 'admin', NULL),
 (3, 'warden', '$2a$10$z8B/lRnRLvO3B6sq09qK8OQkOagKSF.KynFouLJQFoUzYOk9sElkW', 'admin', NULL);
-
-
 
 CREATE TABLE IF NOT EXISTS `visitors` (
   `id` int(11) NOT NULL AUTO_INCREMENT,

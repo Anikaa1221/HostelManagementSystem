@@ -34,6 +34,10 @@ if (!DB_HOST || !DB_USER || !DB_NAME) {
 const twilioEnabled = !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER);
 const twilioClient = twilioEnabled ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) : null;
 
+/* =======================
+   SINGLE SMS HELPER
+   (only one definition — the duplicate simulation version has been removed)
+======================= */
 async function sendParentSms(phone, message) {
   if (!phone) {
     console.log("SMS skipped: missing parent phone number");
@@ -155,25 +159,6 @@ function validateFields(fields, res) {
 }
 
 /* =======================
-   HELPER: Send SMS (Simulated)
-======================= */
-async function sendParentSms(phone, message) {
-  if (!phone) {
-    console.log("⚠️ SMS Simulation Skipped: No parent phone number provided for student.");
-    return;
-  }
-  
-  console.log("\n" + "=".repeat(50));
-  console.log(`📱 SIMULATED SMS OUTBOUND`);
-  console.log(`TO: ${phone}`);
-  console.log(`MESSAGE: "${message}"`);
-  console.log("=".repeat(50) + "\n");
-  
-  // Note: To send real SMS, integrate Twilio or Fast2SMS API here.
-  return Promise.resolve();
-}
-
-/* =======================
    TEST ROUTE
 ======================= */
 app.get("/", (req, res) => {
@@ -239,8 +224,6 @@ app.post("/signup", async (req, res) => {
     // Hash password before storing
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-
-
 
     const [result] = await db.query(
       "INSERT INTO users (username, password, role, student_id) VALUES (?, ?, ?, ?)",
@@ -891,33 +874,13 @@ app.get("/attendance", async (req, res) => {
   }
 });
 
-app.get("/attendance/:student_id", async (req, res) => {
-  try {
-    const { student_id } = req.params;
-
-    const [rows] = await db.query(`
-      SELECT a.id, a.student_id, s.name AS student_name, a.date, a.status, a.method, a.geofenced
-      FROM attendance a
-      JOIN students s ON a.student_id = s.id
-      WHERE a.student_id = ?
-      ORDER BY a.date DESC
-    `, [student_id]);
-
-    res.json({ success: true, data: rows });
-  } catch (err) {
-    console.error("Get Student Attendance Error:", err.message);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-});
-
-
 /* =======================
    SMART ATTENDANCE VERIFICATION
 ======================= */
 app.get("/attendance/active-pin", (req, res) => {
   const elapsed = Math.floor((Date.now() - activeAttendancePIN.generatedAt) / 1000);
   const remaining = Math.max(0, 30 - elapsed);
-  
+
   res.json({
     success: true,
     code: activeAttendancePIN.code,
@@ -965,17 +928,17 @@ app.post("/attendance/checkin", async (req, res) => {
 
       const hostelLat = 12.9716;
       const hostelLng = 77.5946;
-      
-      const R = 6371e3; // Earth radius in meters
-      const phi1 = lat * Math.PI/180;
-      const phi2 = hostelLat * Math.PI/180;
-      const deltaPhi = (hostelLat-lat) * Math.PI/180;
-      const deltaLambda = (hostelLng-lng) * Math.PI/180;
 
-      const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
-                Math.cos(phi1) * Math.cos(phi2) *
-                Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const R = 6371e3; // Earth radius in meters
+      const phi1 = lat * Math.PI / 180;
+      const phi2 = hostelLat * Math.PI / 180;
+      const deltaPhi = (hostelLat - lat) * Math.PI / 180;
+      const deltaLambda = (hostelLng - lng) * Math.PI / 180;
+
+      const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+        Math.cos(phi1) * Math.cos(phi2) *
+        Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const distance = R * c; // in meters
 
       if (distance > 100) {
@@ -1030,7 +993,6 @@ app.get("/attendance/report", async (req, res) => {
     const recordsMap = {};
     attendance.forEach(r => {
       const sId = r.student_id;
-      // Get the correct day representation locally
       const day = new Date(r.date).getDate();
       if (!recordsMap[sId]) recordsMap[sId] = {};
       recordsMap[sId][day] = r.status === "Present" ? "P" : "A";
@@ -1048,6 +1010,25 @@ app.get("/attendance/report", async (req, res) => {
     });
   } catch (err) {
     console.error("Report Error:", err.message);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+app.get("/attendance/:student_id", async (req, res) => {
+  try {
+    const { student_id } = req.params;
+
+    const [rows] = await db.query(`
+      SELECT a.id, a.student_id, s.name AS student_name, a.date, a.status, a.method, a.geofenced
+      FROM attendance a
+      JOIN students s ON a.student_id = s.id
+      WHERE a.student_id = ?
+      ORDER BY a.date DESC
+    `, [student_id]);
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("Get Student Attendance Error:", err.message);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
