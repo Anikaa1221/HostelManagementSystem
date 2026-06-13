@@ -120,7 +120,26 @@ async function initializeDatabase() {
 // Run DB Initializer
 initializeDatabase();
 
-// Removed PIN rotation logic
+// Dynamic PIN store for smart attendance check-in (rotates every 30s)
+let activeAttendancePIN = {
+  code: "000000",
+  generatedAt: 0,
+  expiresInSeconds: 30
+};
+
+function rotatePIN() {
+  const pin = Math.floor(100000 + Math.random() * 900000).toString();
+  activeAttendancePIN = {
+    code: pin,
+    generatedAt: Date.now(),
+    expiresInSeconds: 30
+  };
+  return activeAttendancePIN;
+}
+
+// Rotate immediately and schedule interval
+rotatePIN();
+setInterval(rotatePIN, 30000);
 
 /* =======================
    HELPER: Validate fields
@@ -166,7 +185,7 @@ app.get("/", (req, res) => {
 ======================= */
 app.post("/signup", async (req, res) => {
   try {
-    const { username, password, role, email, parent_phone } = req.body;
+    const { username, password, role, email } = req.body;
     if (!validateFields({ username, password }, res)) return;
 
     const userRole = role || "student";
@@ -221,12 +240,7 @@ app.post("/signup", async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    if (linkedStudentId && parent_phone) {
-      await db.query(
-        "UPDATE students SET parent_phone = ? WHERE id = ?",
-        [parent_phone.trim(), linkedStudentId]
-      );
-    }
+
 
     const [result] = await db.query(
       "INSERT INTO users (username, password, role, student_id) VALUES (?, ?, ?, ?)",
@@ -897,11 +911,29 @@ app.get("/attendance/:student_id", async (req, res) => {
 });
 
 
+/* =======================
+   SMART ATTENDANCE VERIFICATION
+======================= */
+app.get("/attendance/active-pin", (req, res) => {
+  const elapsed = Math.floor((Date.now() - activeAttendancePIN.generatedAt) / 1000);
+  const remaining = Math.max(0, 30 - elapsed);
+  
+  res.json({
+    success: true,
+    code: activeAttendancePIN.code,
+    secondsRemaining: remaining
+  });
+});
 
 app.post("/attendance/checkin", async (req, res) => {
   try {
-    const { student_id, lat, lng, bypass_geofence, bypass_time } = req.body;
-    if (!validateFields({ student_id }, res)) return;
+    const { student_id, pin, lat, lng, bypass_geofence, bypass_time } = req.body;
+    if (!validateFields({ student_id, pin }, res)) return;
+
+    // Validate PIN
+    if (String(pin).trim() !== activeAttendancePIN.code) {
+      return res.status(400).json({ success: false, message: "Invalid or expired check-in PIN" });
+    }
 
     // Time window constraint: 7:30 PM - 9:00 PM local time
     if (!bypass_time) {
